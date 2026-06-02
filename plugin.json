@@ -1,0 +1,20 @@
+{
+  "$schema": "https://developer.staffbase.com/schemas/plugin.schema.json",
+  "id": "staffbase.sblabs",
+  "name": "Staffbase Labs",
+  "version": "1.0.0",
+  "description": "Browse, request, and explore custom widgets, plugins, and integrations built by the Staffbase Customer Care team.",
+  "vendor": "Staffbase Labs",
+  "kinds": ["custom-plugin"],
+  "icon": "https://files.staffbase.com/icons/staffbase_logo.svg",
+  "entry": {
+    "url": "./dist/index.html"
+  },
+  "permissions": [
+    "user.read"
+  ],
+  "sso": {
+    "algorithm": "RS256",
+    "publicKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnqnFCfH0VNH30Yl2cJ86\ngBF+QLt3Tk2yX2VwGwaY4M3g3VHje6znltAs0VF4jTcUmKCjvec1pW+BPQ2pe88H\nNdxopmUbmM+Cy4qZ42tPM/q8ID5JQbJsOWBnvdCPQOgYWMcjyISRvxOnC8ujJd2g\nZsx5LndgseDTP1Km5b6E8t3Kc3av6MrfeYiI4Lybuz+8s9oDCfYppliXOiLt+NOx\njr6r2qXSeTBGmAvp+S+heYdCrns3/uPfh/yCPA3IHEpgFQ8otKBvVUWzGSBEiCkp\ncf/U9P6N49ZV8ogtnOEB0y4i91I9jStMPhiuWyDYCP4bxYZ5cVkCbP5+rnvEsgnX\niQIDAQAB\n-----END PUBLIC KEY-----"
+  }
+}
