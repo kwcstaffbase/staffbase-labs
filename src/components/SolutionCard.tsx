@@ -1,10 +1,14 @@
+import { useState } from 'react';
 import { Solution } from '../data/catalog';
+import { WIDGET_BUNDLES } from '../data/bundles';
+import { UserContext } from '../utils/jwt';
+import { installWidget, InstallState } from '../utils/api';
 import Icon from './Icon';
 
 interface SolutionCardProps {
   solution: Solution;
+  user: UserContext;
   onClick: () => void;
-  onAddToInstance?: () => void;
 }
 
 const CATEGORY_CLASS: Record<string, string> = {
@@ -13,8 +17,56 @@ const CATEGORY_CLASS: Record<string, string> = {
   Integration: 'badge--integration',
 };
 
-export default function SolutionCard({ solution, onClick, onAddToInstance }: SolutionCardProps) {
+export default function SolutionCard({ solution, user, onClick }: SolutionCardProps) {
   const isExperimental = solution.tier === 'Experimental';
+  const bundle = WIDGET_BUNDLES[solution.id];
+
+  const [installState, setInstallState] = useState<InstallState>('idle');
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  async function handleInstall(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!bundle || installState === 'loading') return;
+    setInstallState('loading');
+    setInstallError(null);
+    const result = await installWidget(user.tenant, bundle.bundleUrl, bundle.elementName);
+    if (result.success) {
+      setInstallState('success');
+      setTimeout(() => setInstallState('idle'), 3500);
+    } else {
+      setInstallError(result.error ?? 'Unknown error');
+      setInstallState('error');
+      setTimeout(() => { setInstallState('idle'); setInstallError(null); }, 6000);
+    }
+  }
+
+  function renderInstallButton() {
+    if (installState === 'loading') {
+      return (
+        <button className="btn btn--primary btn--sm" disabled>
+          <span className="btn-spinner" />
+          Installing…
+        </button>
+      );
+    }
+    if (installState === 'success') {
+      return (
+        <button className="btn btn--success btn--sm" disabled>
+          <Icon name="check-circle" size={13} />
+          Added!
+        </button>
+      );
+    }
+    if (bundle) {
+      return (
+        <button className="btn btn--primary btn--sm" onClick={handleInstall}>
+          Add to Instance
+        </button>
+      );
+    }
+    // No bundle (e.g. Digital Business Card) — no install button
+    return null;
+  }
 
   return (
     <article
@@ -50,10 +102,7 @@ export default function SolutionCard({ solution, onClick, onAddToInstance }: Sol
         className="solution-card__actions"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={onClick}
-        >
+        <button className="btn btn--ghost btn--sm" onClick={onClick}>
           View Details
         </button>
         {isExperimental ? (
@@ -68,17 +117,16 @@ export default function SolutionCard({ solution, onClick, onAddToInstance }: Sol
             GitHub
           </a>
         ) : (
-          <button
-            className="btn btn--primary btn--sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddToInstance?.();
-            }}
-          >
-            Add to Instance
-          </button>
+          renderInstallButton()
         )}
       </div>
+
+      {installState === 'error' && installError && (
+        <div className="card-install-error">
+          <Icon name="triangle-alert" size={12} />
+          {installError}
+        </div>
+      )}
     </article>
   );
 }

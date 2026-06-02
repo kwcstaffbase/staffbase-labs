@@ -256,6 +256,68 @@ p:last-child { margin-bottom: 0; }
   padding: var(--space-3) var(--space-8);
 }
 
+.btn--success {
+  background: var(--color-green);
+  color: var(--color-white);
+  border: none;
+  cursor: default;
+}
+.btn--success:hover { background: var(--color-green); }
+
+.btn--danger {
+  background: #DC2626;
+  color: var(--color-white);
+  border: none;
+}
+.btn--danger:hover { background: #B91C1C; }
+
+/* Spinner inside buttons */
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+.btn-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btn-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+.btn-spinner--dark {
+  border-color: rgba(0,0,0,0.2);
+  border-top-color: var(--color-navy);
+}
+
+/* Inline error beneath card actions */
+.card-install-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: #FEF2F2;
+  color: #B91C1C;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+/* Inline error beneath detail hero buttons */
+.detail-install-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(185, 28, 28, 0.15);
+  color: #FCA5A5;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  max-width: 480px;
+}
+
 /* --------------------------------------------
    Badges
    -------------------------------------------- */

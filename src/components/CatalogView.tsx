@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { SOLUTIONS, Solution, Category } from '../data/catalog';
-import { UserContext, buildZendeskUrl } from '../utils/jwt';
+import { UserContext } from '../utils/jwt';
 import SolutionCard from './SolutionCard';
 
 type ViewMode = 'all' | 'supported' | 'experimental';
@@ -28,11 +28,6 @@ export default function CatalogView({ mode, user, onViewDetail }: CatalogViewPro
   function applyFilter(solutions: Solution[]): Solution[] {
     if (categoryFilter === 'all') return solutions;
     return solutions.filter((s) => s.category === categoryFilter);
-  }
-
-  function handleAddToInstance(solution: Solution) {
-    const url = buildZendeskUrl(solution.title, user);
-    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   const heroTitles: Record<ViewMode, { label: string; title: string; subtitle: string }> = {
@@ -100,8 +95,8 @@ export default function CatalogView({ mode, user, onViewDetail }: CatalogViewPro
                   <SolutionCard
                     key={s.id}
                     solution={s}
+                    user={user}
                     onClick={() => onViewDetail(s.id)}
-                    onAddToInstance={() => handleAddToInstance(s)}
                   />
                 ))}
               </div>
@@ -128,6 +123,7 @@ export default function CatalogView({ mode, user, onViewDetail }: CatalogViewPro
                   <SolutionCard
                     key={s.id}
                     solution={s}
+                    user={user}
                     onClick={() => onViewDetail(s.id)}
                   />
                 ))}

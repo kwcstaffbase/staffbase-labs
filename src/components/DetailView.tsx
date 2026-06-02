@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Solution } from '../data/catalog';
-import { UserContext, buildZendeskUrl } from '../utils/jwt';
+import { WIDGET_BUNDLES } from '../data/bundles';
+import { UserContext } from '../utils/jwt';
+import { installWidget, InstallState } from '../utils/api';
 import Icon from './Icon';
 
 interface DetailViewProps {
@@ -16,10 +19,49 @@ const CATEGORY_CLASS: Record<string, string> = {
 
 export default function DetailView({ solution, user, onBack }: DetailViewProps) {
   const isExperimental = solution.tier === 'Experimental';
+  const bundle = WIDGET_BUNDLES[solution.id];
 
-  function handleAddToInstance() {
-    const url = buildZendeskUrl(solution.title, user);
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const [installState, setInstallState] = useState<InstallState>('idle');
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  async function handleInstall() {
+    if (!bundle || installState === 'loading') return;
+    setInstallState('loading');
+    setInstallError(null);
+    const result = await installWidget(user.tenant, bundle.bundleUrl, bundle.elementName);
+    if (result.success) {
+      setInstallState('success');
+      setTimeout(() => setInstallState('idle'), 4000);
+    } else {
+      setInstallError(result.error ?? 'Unknown error');
+      setInstallState('error');
+      setTimeout(() => { setInstallState('idle'); setInstallError(null); }, 8000);
+    }
+  }
+
+  function renderHeroInstallButton() {
+    if (!bundle) return null;
+    if (installState === 'loading') {
+      return (
+        <button className="btn btn--primary btn--lg" disabled>
+          <span className="btn-spinner" />
+          Installing…
+        </button>
+      );
+    }
+    if (installState === 'success') {
+      return (
+        <button className="btn btn--success btn--lg" disabled>
+          <Icon name="check-circle" size={18} />
+          Added to Instance!
+        </button>
+      );
+    }
+    return (
+      <button className="btn btn--primary btn--lg" onClick={handleInstall}>
+        Add to Instance
+      </button>
+    );
   }
 
   return (
@@ -87,9 +129,7 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
                     View on GitHub
                   </a>
                 ) : (
-                  <button className="btn btn--primary btn--lg" onClick={handleAddToInstance}>
-                    Add to Instance
-                  </button>
+                  renderHeroInstallButton()
                 )}
                 {solution.has_live_demo && (
                   <a
@@ -104,6 +144,12 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
                   </a>
                 )}
               </div>
+              {installState === 'error' && installError && (
+                <div className="detail-install-error">
+                  <Icon name="triangle-alert" size={14} />
+                  {installError}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -296,9 +342,17 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
                 Get the {solution.title} running on your Staffbase instance today.
               </p>
               <div className="cta-strip__buttons">
-                <button className="btn btn--white btn--lg" onClick={handleAddToInstance}>
-                  Add to Instance
-                </button>
+                {bundle && (
+                  <button
+                    className={`btn btn--lg ${installState === 'success' ? 'btn--success' : 'btn--white'}`}
+                    onClick={handleInstall}
+                    disabled={installState === 'loading' || installState === 'success'}
+                  >
+                    {installState === 'loading' && <span className="btn-spinner btn-spinner--dark" />}
+                    {installState === 'success' && <Icon name="check-circle" size={18} />}
+                    {installState === 'loading' ? 'Installing…' : installState === 'success' ? 'Added to Instance!' : 'Add to Instance'}
+                  </button>
+                )}
                 <a
                   href="mailto:support@staffbase.com"
                   className="btn btn--white-outline btn--lg"
