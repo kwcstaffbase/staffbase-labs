@@ -19,6 +19,27 @@ export interface UserContext {
   tenant: string | null;
 }
 
+/**
+ * Extract the tenant slug from the JWT `iss` field.
+ * Staffbase sets iss to the instance origin, e.g. "https://cckelvin.staffbase.com"
+ * We pull the subdomain — "cckelvin" — as the tenant slug.
+ */
+function tenantFromIss(iss?: unknown): string | null {
+  if (typeof iss !== 'string') return null;
+  try {
+    const hostname = new URL(iss).hostname; // "cckelvin.staffbase.com"
+    const parts = hostname.split('.');
+    // Expect <tenant>.staffbase.com
+    if (parts.length >= 3 && parts[parts.length - 2] === 'staffbase') {
+      return parts[0];
+    }
+  } catch {
+    // iss may not be a full URL in some environments — try treating it as a slug directly
+    if (/^[a-z0-9-]+$/.test(iss)) return iss;
+  }
+  return null;
+}
+
 export function parseJWT(token: string): StaffbaseJWTPayload | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
@@ -56,7 +77,7 @@ export function getUserContext(): UserContext {
     email: payload.email ?? null,
     name: fullName,
     instanceId: payload.instance_id ?? payload.tenant ?? null,
-    tenant: payload.tenant ?? null,
+    tenant: payload.tenant ?? tenantFromIss(payload.iss) ?? null,
   };
 }
 
