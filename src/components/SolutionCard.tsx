@@ -29,7 +29,7 @@ export default function SolutionCard({ solution, user, onClick }: SolutionCardPr
     if (!bundle || installState === 'loading') return;
     setInstallState('loading');
     setInstallError(null);
-    const result = await installWidget(user.tenant, bundle.bundleUrl, bundle.elementName);
+    const result = await installWidget(user.instanceOrigin, bundle.bundleUrl, bundle.elementName);
     if (result.success) {
       setInstallState('success');
       setTimeout(() => setInstallState('idle'), 3500);

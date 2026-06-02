@@ -6,6 +6,7 @@ export interface StaffbaseJWTPayload {
   family_name?: string;
   instance_id?: string;
   tenant?: string;
+  iss?: string;
   iat?: number;
   exp?: number;
   [key: string]: unknown;
@@ -16,28 +17,28 @@ export interface UserContext {
   email: string | null;
   name: string | null;
   instanceId: string | null;
-  tenant: string | null;
+  /**
+   * The full origin of the Staffbase instance extracted from the JWT `iss` claim.
+   * e.g. "https://cckelvin.staffbase.com" or "https://intranet.company.com"
+   * Used as the base URL for API calls — works with custom domains.
+   */
+  instanceOrigin: string | null;
 }
 
 /**
- * Extract the tenant slug from the JWT `iss` field.
- * Staffbase sets iss to the instance origin, e.g. "https://cckelvin.staffbase.com"
- * We pull the subdomain — "cckelvin" — as the tenant slug.
+ * Normalise the JWT `iss` claim to a bare origin (no trailing slash).
+ * iss is typically the full instance URL, e.g.
+ *   "https://cckelvin.staffbase.com"
+ *   "https://intranet.company.com"
  */
-function tenantFromIss(iss?: unknown): string | null {
-  if (typeof iss !== 'string') return null;
+function originFromIss(iss?: string): string | null {
+  if (!iss) return null;
   try {
-    const hostname = new URL(iss).hostname; // "cckelvin.staffbase.com"
-    const parts = hostname.split('.');
-    // Expect <tenant>.staffbase.com
-    if (parts.length >= 3 && parts[parts.length - 2] === 'staffbase') {
-      return parts[0];
-    }
+    const { origin } = new URL(iss);
+    return origin !== 'null' ? origin : null;
   } catch {
-    // iss may not be a full URL in some environments — try treating it as a slug directly
-    if (/^[a-z0-9-]+$/.test(iss)) return iss;
+    return null;
   }
-  return null;
 }
 
 export function parseJWT(token: string): StaffbaseJWTPayload | null {
@@ -60,7 +61,7 @@ export function getUserContext(): UserContext {
     email: null,
     name: null,
     instanceId: null,
-    tenant: null,
+    instanceOrigin: null,
   };
 
   if (!token) return empty;
@@ -77,7 +78,7 @@ export function getUserContext(): UserContext {
     email: payload.email ?? null,
     name: fullName,
     instanceId: payload.instance_id ?? payload.tenant ?? null,
-    tenant: payload.tenant ?? tenantFromIss(payload.iss) ?? null,
+    instanceOrigin: originFromIss(payload.iss),
   };
 }
 
@@ -92,6 +93,7 @@ export function buildZendeskUrl(
 
   const lines = [`Solution: ${solutionTitle}`];
   if (user.instanceId) lines.push(`Instance: ${user.instanceId}`);
+  if (user.instanceOrigin) lines.push(`Instance URL: ${user.instanceOrigin}`);
   if (user.email) lines.push(`Requested by: ${user.email}`);
   if (user.name) lines.push(`Name: ${user.name}`);
 

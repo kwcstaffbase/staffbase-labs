@@ -11,12 +11,13 @@ export interface InstallResult {
  * POST /api/branch/widgets on the customer's Staffbase instance.
  * Requires an API token saved in localStorage by the admin backoffice view.
  *
- * @param tenant   - Staffbase tenant slug from the JWT (e.g. "cckelvin")
- * @param bundleUrl   - CDN URL of the widget JS bundle
- * @param elementName - Custom element name registered by the bundle
+ * @param instanceOrigin - Full origin of the Staffbase instance from the JWT iss claim
+ *                         e.g. "https://cckelvin.staffbase.com" or "https://intranet.company.com"
+ * @param bundleUrl      - CDN URL of the widget JS bundle
+ * @param elementName    - Custom element name registered by the bundle
  */
 export async function installWidget(
-  tenant: string | null,
+  instanceOrigin: string | null,
   bundleUrl: string,
   elementName: string,
 ): Promise<InstallResult> {
@@ -29,14 +30,14 @@ export async function installWidget(
     };
   }
 
-  if (!tenant) {
+  if (!instanceOrigin) {
     return {
       success: false,
       error: 'Could not determine your Staffbase instance. Open this plugin from inside your Staffbase platform.',
     };
   }
 
-  const endpoint = `https://${tenant}.staffbase.com/api/branch/widgets`;
+  const endpoint = `${instanceOrigin}/api/branch/widgets`;
 
   try {
     const response = await fetch(endpoint, {
