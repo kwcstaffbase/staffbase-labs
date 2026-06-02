@@ -14,10 +14,14 @@ function getDebugInfo() {
   const params = new URLSearchParams(window.location.search);
   const rawJwt = params.get('jwt');
   const referrer = document.referrer || '(none)';
-  if (!rawJwt) return { hasJwt: false, iss: null, rawIss: null, referrer };
+  const storedToken = localStorage.getItem('sblabs_api_token');
+  const tokenStatus = storedToken
+    ? `set (${storedToken.slice(0, 6)}…)`
+    : 'NOT SET';
+  if (!rawJwt) return { hasJwt: false, iss: null, rawIss: null, referrer, tokenStatus };
   const payload = parseJWT(rawJwt);
   const iss = payload?.iss ?? null;
-  return { hasJwt: true, iss, rawIss: typeof iss === 'string' ? iss : String(iss ?? ''), referrer };
+  return { hasJwt: true, iss, rawIss: typeof iss === 'string' ? iss : String(iss ?? ''), referrer, tokenStatus };
 }
 
 export default function App() {
@@ -80,6 +84,12 @@ export default function App() {
           <span>
             instanceOrigin: <span style={{ color: user.instanceOrigin ? '#a6e3a1' : '#f38ba8' }}>
               {user.instanceOrigin ?? '(null — this causes the error)'}
+            </span>
+          </span>
+          {' · '}
+          <span>
+            API token: <span style={{ color: debug.tokenStatus.startsWith('set') ? '#a6e3a1' : '#f38ba8' }}>
+              {debug.tokenStatus}
             </span>
           </span>
         </div>

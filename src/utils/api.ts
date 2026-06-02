@@ -45,7 +45,7 @@ export async function installWidget(
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Bearer ${apiToken}`,
+        'Authorization': `Basic ${btoa(apiToken)}`,
       },
       body: JSON.stringify({
         url: bundleUrl,
