@@ -1,4 +1,3 @@
-
 import { Solution } from '../data/catalog';
 import { UserContext, buildZendeskUrl } from '../utils/jwt';
 import Icon from './Icon';

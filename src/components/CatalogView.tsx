@@ -112,18 +112,16 @@ export default function CatalogView({ mode, user, onViewDetail }: CatalogViewPro
           {mode === 'all' && <div className="section-separator" />}
 
           {/* Experimental section */}
-          {(mode === 'all' || mode === 'experimental') && (
+          {mode === 'all' && (
             <section>
-              {mode === 'all' && (
-                <div className="section-header">
-                  <span className="section-label section-label--experimental">EXPERIMENTAL</span>
-                  <h2 className="section-title">Community &amp; Open Source</h2>
-                  <p className="section-body">
-                    These integrations are community-built, open source, and not officially supported by Staffbase.
-                    Use them as starting points for your own custom builds.
-                  </p>
-                </div>
-              )}
+              <div className="section-header">
+                <span className="section-label section-label--experimental">EXPERIMENTAL</span>
+                <h2 className="section-title">Community &amp; Open Source</h2>
+                <p className="section-body">
+                  These integrations are community-built, open source, and not officially supported by Staffbase.
+                  Use them as starting points for your own custom builds.
+                </p>
+              </div>
 
               <div className="card-grid">
                 {experimental.map((s) => (

@@ -2,9 +2,9 @@
  * Inline SVG icon set covering every icon used by the catalog.
  * Keyed by the Lucide icon name used in the source HTML.
  */
-import React from 'react';
+import type { ReactNode } from 'react';
 
-const PATHS: Record<string, React.ReactNode> = {
+const PATHS: Record<string, ReactNode> = {
   'party-popper': <><path d="m5.8 11.3-1.9 7.4 7.4-1.9"/><path d="M11 13 9 2l3.4 3.5L15 2l1 5.5 4.5-1L17 11l5 2.5-4.5.5 1 5-4-2.5-2 4.5-1-4.5-5 1.5 2.5-4-4-.5"/></>,
   'clock': <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
   'timer': <><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></>,

@@ -3,6 +3,7 @@ import { getUserContext, UserContext } from './utils/jwt';
 import Header from './components/Header';
 import CatalogView from './components/CatalogView';
 import DetailView from './components/DetailView';
+import ExperimentalView from './components/ExperimentalView';
 import { getSolutionById } from './data/catalog';
 
 type NavView = 'all' | 'supported' | 'experimental';
@@ -35,7 +36,9 @@ export default function App() {
   return (
     <div className="app">
       <Header activeView={activeNavView} onNavigate={handleNavigate} />
-      {view === 'detail' && detailSolution ? (
+      {view === 'experimental' ? (
+        <ExperimentalView />
+      ) : view === 'detail' && detailSolution ? (
         <DetailView solution={detailSolution} user={user} onBack={handleBack} />
       ) : (
         <CatalogView

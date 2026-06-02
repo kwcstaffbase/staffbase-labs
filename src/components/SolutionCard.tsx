@@ -1,4 +1,3 @@
-
 import { Solution } from '../data/catalog';
 import Icon from './Icon';
 

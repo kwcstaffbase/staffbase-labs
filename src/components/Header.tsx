@@ -1,5 +1,3 @@
-
-
 type View = 'all' | 'supported' | 'experimental';
 
 interface HeaderProps {
