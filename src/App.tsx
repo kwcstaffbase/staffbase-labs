@@ -10,7 +10,23 @@ type NavView = 'all' | 'supported' | 'experimental';
 type AppView = NavView | 'detail';
 
 export default function App() {
-  const [user] = useState<UserContext>(() => getUserContext());
+  const [user] = useState<UserContext>(() => {
+    // DEBUG — remove before final release
+    const params = new URLSearchParams(window.location.search);
+    const rawJwt = params.get('jwt');
+    if (rawJwt) {
+      try {
+        const payloadB64 = rawJwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(payloadB64));
+        console.log('[SBLabs] JWT payload:', payload);
+      } catch (e) {
+        console.warn('[SBLabs] Could not decode JWT:', e);
+      }
+    } else {
+      console.warn('[SBLabs] No ?jwt= found in URL. Current URL:', window.location.href);
+    }
+    return getUserContext();
+  });
   const [view, setView] = useState<AppView>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
 
