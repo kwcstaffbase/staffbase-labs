@@ -8,7 +8,8 @@
   "kinds": ["custom-plugin"],
   "icon": "https://files.staffbase.com/icons/staffbase_logo.svg",
   "entry": {
-    "url": "https://staffbase-labs.vercel.app/"
+    "url": "https://staffbase-labs.vercel.app/",
+    "adminUrl": "https://staffbase-labs.vercel.app/admin.html"
   },
   "permissions": [
     "user.read"
