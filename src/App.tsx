@@ -13,10 +13,11 @@ type AppView = NavView | 'detail';
 function getDebugInfo() {
   const params = new URLSearchParams(window.location.search);
   const rawJwt = params.get('jwt');
-  if (!rawJwt) return { hasJwt: false, iss: null, rawIss: null };
+  const referrer = document.referrer || '(none)';
+  if (!rawJwt) return { hasJwt: false, iss: null, rawIss: null, referrer };
   const payload = parseJWT(rawJwt);
   const iss = payload?.iss ?? null;
-  return { hasJwt: true, iss, rawIss: typeof iss === 'string' ? iss : String(iss ?? '') };
+  return { hasJwt: true, iss, rawIss: typeof iss === 'string' ? iss : String(iss ?? ''), referrer };
 }
 
 export default function App() {
@@ -70,6 +71,10 @@ export default function App() {
           {' · '}
           <span>
             iss: <span style={{ color: '#fab387' }}>{debug.rawIss || '(none)'}</span>
+          </span>
+          {' · '}
+          <span>
+            referrer: <span style={{ color: debug.referrer !== '(none)' ? '#a6e3a1' : '#f38ba8' }}>{debug.referrer}</span>
           </span>
           {' · '}
           <span>

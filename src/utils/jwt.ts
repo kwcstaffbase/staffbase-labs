@@ -26,19 +26,37 @@ export interface UserContext {
 }
 
 /**
- * Normalise the JWT `iss` claim to a bare origin (no trailing slash).
- * iss is typically the full instance URL, e.g.
- *   "https://cckelvin.staffbase.com"
- *   "https://intranet.company.com"
+ * The Staffbase plugin runs inside an iframe embedded on the customer's
+ * Staffbase instance. The browser sets document.referrer to the parent
+ * page URL automatically, giving us the exact origin regardless of whether
+ * the customer uses a staffbase.com subdomain or a custom domain.
+ *
+ * Falls back to parsing the JWT `iss` claim in case referrer is absent
+ * (e.g. when opened directly in a browser tab for testing).
  */
-function originFromIss(iss?: string): string | null {
-  if (!iss) return null;
-  try {
-    const { origin } = new URL(iss);
-    return origin !== 'null' ? origin : null;
-  } catch {
-    return null;
+function resolveInstanceOrigin(issFromJwt?: string): string | null {
+  // Primary: use the parent page origin via document.referrer
+  if (document.referrer) {
+    try {
+      const { origin } = new URL(document.referrer);
+      if (origin && origin !== 'null') return origin;
+    } catch {
+      // fall through
+    }
   }
+
+  // Fallback: try to parse iss as a URL (some Staffbase environments set it
+  // to a full URL rather than the plain string "staffbase-backend-live")
+  if (issFromJwt) {
+    try {
+      const { origin } = new URL(issFromJwt);
+      if (origin && origin !== 'null') return origin;
+    } catch {
+      // iss is not a URL — nothing more we can do
+    }
+  }
+
+  return null;
 }
 
 export function parseJWT(token: string): StaffbaseJWTPayload | null {
@@ -78,7 +96,7 @@ export function getUserContext(): UserContext {
     email: payload.email ?? null,
     name: fullName,
     instanceId: payload.instance_id ?? payload.tenant ?? null,
-    instanceOrigin: originFromIss(payload.iss),
+    instanceOrigin: resolveInstanceOrigin(payload.iss),
   };
 }
 
