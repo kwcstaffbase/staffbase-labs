@@ -1,7 +1,6 @@
 /**
  * Bundle URL and custom element name for each supported solution.
  * Keyed by solution ID (matches catalog.ts).
- * Digital Business Card is omitted — no bundle URL provided.
  */
 export interface WidgetBundle {
   bundleUrl: string;
@@ -56,5 +55,10 @@ export const WIDGET_BUNDLES: Record<string, WidgetBundle> = {
   'company-stock-widget': {
     elementName: 'stock-price',
     bundleUrl: 'https://cc-scripts.staffbase.com/stock-price/sb-cctech.stock-price.js',
+  },
+  'digital-business-card': {
+    // elementName inferred from the bundle filename — confirm against the widget source.
+    elementName: 'digital-business-card',
+    bundleUrl: 'https://cc-scripts.staffbase.com/digital-business-card/sb-custom.digital-business-card.js',
   },
 };

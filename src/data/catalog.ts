@@ -490,7 +490,7 @@ export const SOLUTIONS: Solution[] = [
     title: 'Digital Business Card',
     short_description:
       'Generates a digital business card with QR code linking to a vCard download, enabling seamless professional networking.',
-    category: 'Plugin',
+    category: 'Widget',
     tier: 'Supported',
     overview: [
       'The Digital Business Card widget creates personalized, shareable digital business cards for employees directly from their Staffbase profile data. Each card can display the user\'s name, title, company, department, location, email, phone, and even social media links.',
