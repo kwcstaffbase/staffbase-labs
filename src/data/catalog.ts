@@ -1784,6 +1784,147 @@ export const SOLUTIONS: Solution[] = [
     icon: 'trending-up',
   },
 
+  {
+    id: 'social-feed-taggbox',
+    title: 'Social Feed (Taggbox)',
+    short_description:
+      'Displays a single social media feed — YouTube, Instagram, or LinkedIn — sourced from the customer\'s Taggbox account, rendered as a navigable card with a full-post modal.',
+    category: 'Widget',
+    tier: 'Supported',
+    overview: [
+      'The Social Feed (Taggbox) widget surfaces posts from a single social platform — YouTube, Instagram, Instagram Business, or LinkedIn — pulled from the customer\'s own Taggbox gallery. Posts render as a horizontally navigable card, with a "Read more" modal showing the full post, platform-specific media, and a link to the original.',
+      'The widget is designed to be deployed multiple times on the same page, one instance per platform, each configured with its own Feed ID. The platform is detected automatically from the Taggbox network ID, applying the correct icon and media renderer. Fetched posts are cached in the browser for a configurable period to reduce API calls.',
+      'This is a third-party integration: each instance calls the Taggbox API directly from the client using the customer\'s own API key, Gallery ID, and Feed ID. There is no Staffbase-side proxy, so the customer must own and provision their Taggbox subscription and feeds.',
+    ],
+    use_cases: [
+      {
+        title: 'Branded Social Walls',
+        description:
+          'Embed an Instagram, YouTube, or LinkedIn feed on a campaign or homepage to bring official social content into the intranet.',
+        icon: 'megaphone',
+      },
+      {
+        title: 'Multi-Platform Showcase',
+        description:
+          'Place several instances side by side — one per platform — to present a unified view of the organization\'s social presence.',
+        icon: 'image',
+      },
+      {
+        title: 'Employer Branding & Culture',
+        description:
+          'Highlight curated LinkedIn or Instagram posts to reinforce employer brand and culture for frontline and desk workers alike.',
+        icon: 'trending-up',
+      },
+    ],
+    prerequisites: [
+      {
+        title: 'PSP or PSP+ Instance',
+        description:
+          'Available for Platform Standard Plus / Platform Standard Plus+ customers and tech offerings requests.',
+      },
+      {
+        title: 'Customer Taggbox Subscription',
+        description:
+          'The customer must own a Taggbox account and provide an API key, a Gallery ID, and a Feed ID for each platform they want to display.',
+      },
+      {
+        title: 'Supported Platform',
+        description:
+          'The widget currently renders Instagram, Instagram Business, YouTube, and LinkedIn feeds. Other Taggbox networks require widget development before they can be used.',
+      },
+      {
+        title: 'One Instance Per Platform',
+        description:
+          'Each platform is shown by a separate widget instance configured with its own Feed ID; multiple platforms require multiple instances on the page.',
+      },
+      {
+        title: 'Staffbase CC Coordination',
+        description:
+          'Contact your Customer Care representative to scope the request and deploy the widget instances for your tenant.',
+      },
+    ],
+    config_options: [
+      {
+        label: 'Taggbox API key',
+        type: 'string',
+        description:
+          'Taggbox API key used for authentication. Rendered as a password field in the editor. Sent from the client, so scope it to read-only feed access where possible.',
+        required: true,
+      },
+      {
+        label: 'Gallery ID',
+        type: 'string',
+        description: 'The Taggbox gallery ID that contains the feeds.',
+        required: true,
+      },
+      {
+        label: 'Feed ID',
+        type: 'string',
+        description:
+          'The Taggbox feed ID for the platform this instance should display. Use a different Feed ID per instance to show different platforms.',
+        required: true,
+      },
+      {
+        label: 'Widget title',
+        type: 'string',
+        description: 'Optional title displayed above the card. Leave empty to omit it.',
+      },
+      {
+        label: 'Max posts',
+        type: 'number',
+        description: 'Maximum number of posts to load. Allowed range 1–20.',
+        example: '10',
+      },
+      {
+        label: 'Caption lines',
+        type: 'number',
+        description:
+          'Maximum number of caption lines shown on the card before truncating with an ellipsis. Full text is always visible in the modal. Allowed range 1–10.',
+        example: '3',
+      },
+      {
+        label: 'Arrow background color',
+        type: 'color',
+        description:
+          'Background color of the circular prev/next arrow buttons (also applied to the modal\'s carousel arrows). Must be a valid hex color; invalid values fall back to the default.',
+        example: '#00355D',
+      },
+      {
+        label: 'Arrow icon color',
+        type: 'color',
+        description:
+          'Color of the arrow icons. Must be a valid hex color; invalid values fall back to the default.',
+        example: '#FFFFFF',
+      },
+      {
+        label: 'Cache TTL (minutes)',
+        type: 'number',
+        description:
+          'How long fetched posts are cached in localStorage before a refetch. Minimum 1.',
+        example: '5',
+      },
+    ],
+    screenshots: [
+      {
+        label: 'Feed Card',
+        alt: 'Social feed widget showing a single post as a navigable card',
+      },
+      {
+        label: 'Post Detail Modal',
+        alt: 'Read-more modal showing the full post, media, and a link to the original',
+      },
+      {
+        label: 'Multiple Instances',
+        alt: 'Several social feed instances on one page, one per platform',
+      },
+    ],
+    has_live_demo: true,
+    live_demo_url: 'https://cckelvin.staffbase.com/',
+    owner: 'CC',
+    support_contact: 'custombuilds@staffbase.com',
+    icon: 'megaphone',
+  },
+
   // ─── Experimental Solutions ────────────────────────────────────────────────
 
   {

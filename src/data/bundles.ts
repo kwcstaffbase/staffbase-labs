@@ -61,4 +61,9 @@ export const WIDGET_BUNDLES: Record<string, WidgetBundle> = {
     elementName: 'digital-business-card',
     bundleUrl: 'https://cc-scripts.staffbase.com/digital-business-card/sb-custom.digital-business-card.js',
   },
+  'social-feed-taggbox': {
+    // elementName inferred from the bundle filename — confirm against the widget source.
+    elementName: 'social-feed-taggbox',
+    bundleUrl: 'https://cc-scripts.staffbase.com/widgets/sb-cctech.social-feed-taggbox.min.js',
+  },
 };
