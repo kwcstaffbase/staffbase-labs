@@ -97,6 +97,12 @@ export interface InstalledLookup {
  * The parser still accepts a bare array or a {data:[]} / {widgets:[]} wrapper
  * defensively, and matches a solution by its bundle `url` or `elements` tag.
  */
+// List endpoint is uncertain with the cross-origin Basic token:
+// /api/widgets works with a session cookie, but the token may require the
+// branch-scoped path (same one POST uses). Try both; first that returns a
+// usable list wins. Logs the outcome to the console for diagnosis.
+const WIDGET_LIST_PATHS = ['/api/widgets', '/api/branch/widgets'];
+
 export async function fetchInstalledWidgets(
   instanceOrigin: string | null,
 ): Promise<InstalledLookup> {
@@ -106,46 +112,54 @@ export async function fetchInstalledWidgets(
   if (!apiToken) return { ...empty, error: 'No API token configured.' };
   if (!instanceOrigin) return { ...empty, error: 'Could not determine your Staffbase instance.' };
 
-  try {
-    const response = await fetch(`${instanceOrigin}/api/widgets`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Basic ${apiToken}`,
-      },
-    });
+  let lastError = 'No endpoint returned a widget list.';
 
-    if (!response.ok) {
-      return { ...empty, error: `API error ${response.status}` };
-    }
-
-    const body: unknown = await response.json().catch(() => null);
-
-    const list: unknown[] = Array.isArray(body)
-      ? body
-      : Array.isArray((body as { data?: unknown[] })?.data)
-        ? (body as { data: unknown[] }).data
-        : Array.isArray((body as { widgets?: unknown[] })?.widgets)
-          ? (body as { widgets: unknown[] }).widgets
-          : [];
-
-    const urls = new Set<string>();
-    const elements = new Set<string>();
-
-    for (const item of list) {
-      const w = item as { url?: unknown; elements?: unknown; element?: unknown };
-      if (typeof w.url === 'string') urls.add(w.url.toLowerCase());
-      const els = w.elements ?? w.element ?? [];
-      (Array.isArray(els) ? els : [els]).forEach((e) => {
-        if (typeof e === 'string') elements.add(e);
+  for (const path of WIDGET_LIST_PATHS) {
+    try {
+      const response = await fetch(`${instanceOrigin}${path}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Basic ${apiToken}`,
+        },
       });
-    }
 
-    return { ok: true, urls, elements };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ...empty, error: msg };
+      if (!response.ok) {
+        lastError = `GET ${path} → HTTP ${response.status}`;
+        continue;
+      }
+
+      const body: unknown = await response.json().catch(() => null);
+
+      const list: unknown[] = Array.isArray(body)
+        ? body
+        : Array.isArray((body as { data?: unknown[] })?.data)
+          ? (body as { data: unknown[] }).data
+          : Array.isArray((body as { widgets?: unknown[] })?.widgets)
+            ? (body as { widgets: unknown[] }).widgets
+            : [];
+
+      const urls = new Set<string>();
+      const elements = new Set<string>();
+
+      for (const item of list) {
+        const w = item as { url?: unknown; elements?: unknown; element?: unknown };
+        if (typeof w.url === 'string') urls.add(w.url.toLowerCase());
+        const els = w.elements ?? w.element ?? [];
+        (Array.isArray(els) ? els : [els]).forEach((e) => {
+          if (typeof e === 'string') elements.add(e);
+        });
+      }
+
+      console.info(`[sblabs] install check OK via GET ${path}: ${list.length} widget(s) registered`);
+      return { ok: true, urls, elements };
+    } catch (err) {
+      lastError = `GET ${path} → ${err instanceof Error ? err.message : String(err)}`;
+    }
   }
+
+  console.warn(`[sblabs] install check failed (button fails open): ${lastError}`);
+  return { ...empty, error: lastError };
 }
 
 /** True if a solution's bundle is already registered on the instance. */
