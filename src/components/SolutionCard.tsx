@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Solution } from '../data/catalog';
 import { WIDGET_BUNDLES } from '../data/bundles';
 import { UserContext } from '../utils/jwt';
-import { installWidget, InstallState } from '../utils/api';
+import { installWidget, isWidgetInstalled, InstallState, InstalledLookup } from '../utils/api';
 import Icon from './Icon';
 
 interface SolutionCardProps {
   solution: Solution;
   user: UserContext;
   onClick: () => void;
+  /** Shared lookup of widgets already registered on the instance (fetched once by CatalogView). */
+  installedLookup?: InstalledLookup | null;
 }
 
 const CATEGORY_CLASS: Record<string, string> = {
@@ -17,21 +19,30 @@ const CATEGORY_CLASS: Record<string, string> = {
   Integration: 'badge--integration',
 };
 
-export default function SolutionCard({ solution, user, onClick }: SolutionCardProps) {
+export default function SolutionCard({ solution, user, onClick, installedLookup }: SolutionCardProps) {
   const isExperimental = solution.tier === 'Experimental';
   const bundle = WIDGET_BUNDLES[solution.id];
 
   const [installState, setInstallState] = useState<InstallState>('idle');
   const [installError, setInstallError] = useState<string | null>(null);
+  const [installed, setInstalled] = useState(false);
+
+  // Reflect the shared install-status lookup once it arrives (loads async).
+  useEffect(() => {
+    if (bundle && installedLookup?.ok) {
+      setInstalled(isWidgetInstalled(installedLookup, bundle.bundleUrl, bundle.elementName));
+    }
+  }, [bundle, installedLookup]);
 
   async function handleInstall(e: React.MouseEvent) {
     e.stopPropagation();
-    if (!bundle || installState === 'loading') return;
+    if (!bundle || installState === 'loading' || installed) return;
     setInstallState('loading');
     setInstallError(null);
     const result = await installWidget(user.instanceOrigin, bundle.bundleUrl, bundle.elementName);
     if (result.success) {
       setInstallState('success');
+      setInstalled(true);
       setTimeout(() => setInstallState('idle'), 3500);
     } else {
       setInstallError(result.error ?? 'Unknown error');
@@ -54,6 +65,14 @@ export default function SolutionCard({ solution, user, onClick }: SolutionCardPr
         <button className="btn btn--success btn--sm" disabled>
           <Icon name="check-circle" size={13} />
           Added!
+        </button>
+      );
+    }
+    if (installed) {
+      return (
+        <button className="btn btn--success btn--sm" disabled>
+          <Icon name="check-circle" size={13} />
+          Already Installed
         </button>
       );
     }

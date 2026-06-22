@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SOLUTIONS, Solution, Category } from '../data/catalog';
 import { UserContext } from '../utils/jwt';
+import { fetchInstalledWidgets, InstalledLookup } from '../utils/api';
 import SolutionCard from './SolutionCard';
 
 type ViewMode = 'all' | 'supported' | 'experimental';
@@ -21,6 +22,17 @@ const FILTER_LABELS: { value: FilterCategory; label: string }[] = [
 
 export default function CatalogView({ mode, user, onViewDetail }: CatalogViewProps) {
   const [categoryFilter, setCategoryFilter] = useState<FilterCategory>('all');
+
+  // Fetch what's already installed once for the whole grid, then share it with
+  // every card so installed solutions render a disabled "Already Installed".
+  const [installedLookup, setInstalledLookup] = useState<InstalledLookup | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchInstalledWidgets(user.instanceOrigin).then((lookup) => {
+      if (!cancelled) setInstalledLookup(lookup);
+    });
+    return () => { cancelled = true; };
+  }, [user.instanceOrigin]);
 
   const supported = SOLUTIONS.filter((s) => s.tier === 'Supported');
   const experimental = SOLUTIONS.filter((s) => s.tier === 'Experimental');
@@ -97,6 +109,7 @@ export default function CatalogView({ mode, user, onViewDetail }: CatalogViewPro
                     solution={s}
                     user={user}
                     onClick={() => onViewDetail(s.id)}
+                    installedLookup={installedLookup}
                   />
                 ))}
               </div>
@@ -125,6 +138,7 @@ export default function CatalogView({ mode, user, onViewDetail }: CatalogViewPro
                     solution={s}
                     user={user}
                     onClick={() => onViewDetail(s.id)}
+                    installedLookup={installedLookup}
                   />
                 ))}
               </div>
