@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Solution } from '../data/catalog';
 import { WIDGET_BUNDLES } from '../data/bundles';
 import { UserContext } from '../utils/jwt';
-import { installWidget, InstallState } from '../utils/api';
+import { installWidget, fetchInstalledWidgets, isWidgetInstalled, InstallState } from '../utils/api';
 import Icon from './Icon';
 
 interface DetailViewProps {
@@ -23,14 +23,33 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
 
   const [installState, setInstallState] = useState<InstallState>('idle');
   const [installError, setInstallError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [alreadyInstalled, setAlreadyInstalled] = useState(false);
+
+  // On open, check whether this widget is already registered on the instance.
+  // Fails open: if the check can't complete, the install button stays usable.
+  useEffect(() => {
+    if (!bundle || isExperimental) return;
+    let cancelled = false;
+    setChecking(true);
+    fetchInstalledWidgets(user.instanceOrigin).then((lookup) => {
+      if (cancelled) return;
+      if (lookup.ok) {
+        setAlreadyInstalled(isWidgetInstalled(lookup, bundle.bundleUrl, bundle.elementName));
+      }
+      setChecking(false);
+    });
+    return () => { cancelled = true; };
+  }, [bundle, isExperimental, user.instanceOrigin]);
 
   async function handleInstall() {
-    if (!bundle || installState === 'loading') return;
+    if (!bundle || installState === 'loading' || alreadyInstalled || checking) return;
     setInstallState('loading');
     setInstallError(null);
     const result = await installWidget(user.instanceOrigin, bundle.bundleUrl, bundle.elementName);
     if (result.success) {
       setInstallState('success');
+      setAlreadyInstalled(true);
       setTimeout(() => setInstallState('idle'), 4000);
     } else {
       setInstallError(result.error ?? 'Unknown error');
@@ -41,6 +60,14 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
 
   function renderHeroInstallButton() {
     if (!bundle) return null;
+    if (checking) {
+      return (
+        <button className="btn btn--primary btn--lg" disabled>
+          <span className="btn-spinner" />
+          Checking…
+        </button>
+      );
+    }
     if (installState === 'loading') {
       return (
         <button className="btn btn--primary btn--lg" disabled>
@@ -54,6 +81,14 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
         <button className="btn btn--success btn--lg" disabled>
           <Icon name="check-circle" size={18} />
           Added to Instance!
+        </button>
+      );
+    }
+    if (alreadyInstalled) {
+      return (
+        <button className="btn btn--success btn--lg" disabled>
+          <Icon name="check-circle" size={18} />
+          Already Installed
         </button>
       );
     }
@@ -344,13 +379,22 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
               <div className="cta-strip__buttons">
                 {bundle && (
                   <button
-                    className={`btn btn--lg ${installState === 'success' ? 'btn--success' : 'btn--white'}`}
+                    className={`btn btn--lg ${(installState === 'success' || alreadyInstalled) ? 'btn--success' : 'btn--white'}`}
                     onClick={handleInstall}
-                    disabled={installState === 'loading' || installState === 'success'}
+                    disabled={checking || alreadyInstalled || installState === 'loading' || installState === 'success'}
                   >
+                    {checking && <span className="btn-spinner btn-spinner--dark" />}
                     {installState === 'loading' && <span className="btn-spinner btn-spinner--dark" />}
-                    {installState === 'success' && <Icon name="check-circle" size={18} />}
-                    {installState === 'loading' ? 'Installing…' : installState === 'success' ? 'Added to Instance!' : 'Add to Instance'}
+                    {(installState === 'success' || alreadyInstalled) && <Icon name="check-circle" size={18} />}
+                    {checking
+                      ? 'Checking…'
+                      : installState === 'loading'
+                        ? 'Installing…'
+                        : installState === 'success'
+                          ? 'Added to Instance!'
+                          : alreadyInstalled
+                            ? 'Already Installed'
+                            : 'Add to Instance'}
                   </button>
                 )}
                 <a

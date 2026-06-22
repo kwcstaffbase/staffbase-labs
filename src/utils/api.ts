@@ -73,3 +73,86 @@ export async function installWidget(
     return { success: false, error: msg };
   }
 }
+
+/**
+ * Normalized view of what is already installed on the instance.
+ * `ok: false` means the check could not be completed (no token, network,
+ * unexpected shape) — callers should fail OPEN and still allow installing.
+ */
+export interface InstalledLookup {
+  ok: boolean;
+  error?: string;
+  /** Lowercased bundle URLs currently registered on the instance. */
+  urls: Set<string>;
+  /** Custom element names currently registered on the instance. */
+  elements: Set<string>;
+}
+
+/**
+ * GET the custom widgets already registered on the instance.
+ *
+ * Custom script widgets are listed at /api/widgets (NOT /api/branch/widgets,
+ * which is write-only, and NOT the Installations API). Each item is shaped:
+ *   { id, url, elements: string[], attributes, flagProtected }
+ * The parser still accepts a bare array or a {data:[]} / {widgets:[]} wrapper
+ * defensively, and matches a solution by its bundle `url` or `elements` tag.
+ */
+export async function fetchInstalledWidgets(
+  instanceOrigin: string | null,
+): Promise<InstalledLookup> {
+  const empty: InstalledLookup = { ok: false, urls: new Set(), elements: new Set() };
+  const apiToken = localStorage.getItem(TOKEN_KEY);
+
+  if (!apiToken) return { ...empty, error: 'No API token configured.' };
+  if (!instanceOrigin) return { ...empty, error: 'Could not determine your Staffbase instance.' };
+
+  try {
+    const response = await fetch(`${instanceOrigin}/api/widgets`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Basic ${apiToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      return { ...empty, error: `API error ${response.status}` };
+    }
+
+    const body: unknown = await response.json().catch(() => null);
+
+    const list: unknown[] = Array.isArray(body)
+      ? body
+      : Array.isArray((body as { data?: unknown[] })?.data)
+        ? (body as { data: unknown[] }).data
+        : Array.isArray((body as { widgets?: unknown[] })?.widgets)
+          ? (body as { widgets: unknown[] }).widgets
+          : [];
+
+    const urls = new Set<string>();
+    const elements = new Set<string>();
+
+    for (const item of list) {
+      const w = item as { url?: unknown; elements?: unknown; element?: unknown };
+      if (typeof w.url === 'string') urls.add(w.url.toLowerCase());
+      const els = w.elements ?? w.element ?? [];
+      (Array.isArray(els) ? els : [els]).forEach((e) => {
+        if (typeof e === 'string') elements.add(e);
+      });
+    }
+
+    return { ok: true, urls, elements };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ...empty, error: msg };
+  }
+}
+
+/** True if a solution's bundle is already registered on the instance. */
+export function isWidgetInstalled(
+  lookup: InstalledLookup,
+  bundleUrl: string,
+  elementName: string,
+): boolean {
+  return lookup.elements.has(elementName) || lookup.urls.has(bundleUrl.toLowerCase());
+}
