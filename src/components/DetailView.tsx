@@ -25,6 +25,8 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
   const [installError, setInstallError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [alreadyInstalled, setAlreadyInstalled] = useState(false);
+  // TEMP diagnostic — shows on the page what the install check returned. Remove once fixed.
+  const [checkInfo, setCheckInfo] = useState<string | null>(null);
 
   // On open, check whether this widget is already registered on the instance.
   // Fails open: if the check can't complete, the install button stays usable.
@@ -34,9 +36,13 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
     setChecking(true);
     fetchInstalledWidgets(user.instanceOrigin).then((lookup) => {
       if (cancelled) return;
-      if (lookup.ok) {
-        setAlreadyInstalled(isWidgetInstalled(lookup, bundle.bundleUrl, bundle.elementName));
-      }
+      const matched = lookup.ok && isWidgetInstalled(lookup, bundle.bundleUrl, bundle.elementName);
+      if (lookup.ok) setAlreadyInstalled(matched);
+      setCheckInfo(
+        lookup.ok
+          ? `✓ check ran: ${lookup.urls.size} URL(s) + ${lookup.elements.size} element(s) registered · this widget matched=${matched} · looking for element "${bundle.elementName}"`
+          : `⚠ check could NOT run (button left enabled): ${lookup.error}`,
+      );
       setChecking(false);
     });
     return () => { cancelled = true; };
@@ -183,6 +189,16 @@ export default function DetailView({ solution, user, onBack }: DetailViewProps) 
                 <div className="detail-install-error">
                   <Icon name="triangle-alert" size={14} />
                   {installError}
+                </div>
+              )}
+              {!isExperimental && bundle && checkInfo && (
+                <div style={{
+                  marginTop: 10, padding: '6px 10px', borderRadius: 6,
+                  fontSize: 12, fontFamily: 'monospace', lineHeight: 1.5,
+                  background: 'rgba(0,0,0,0.25)', color: 'rgba(255,255,255,0.85)',
+                  wordBreak: 'break-word',
+                }}>
+                  {checkInfo}
                 </div>
               )}
             </div>
