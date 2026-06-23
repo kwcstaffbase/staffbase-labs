@@ -1,4 +1,4 @@
-type View = 'all' | 'supported' | 'experimental';
+type View = 'all' | 'supported' | 'experimental' | 'carehours';
 
 interface HeaderProps {
   activeView: View;
@@ -38,6 +38,12 @@ export default function Header({ activeView, onNavigate }: HeaderProps) {
                 onClick={() => onNavigate('experimental')}
               >
                 Experimental
+              </button>
+              <button
+                className={`plugin-header__nav-link${activeView === 'carehours' ? ' plugin-header__nav-link--active' : ''}`}
+                onClick={() => onNavigate('carehours')}
+              >
+                Care Hours
               </button>
             </nav>
 

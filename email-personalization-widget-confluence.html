@@ -1,0 +1,150 @@
+<!--
+  Email Personalization Widget — Confluence page (paste-ready)
+  HOW TO USE:
+  1. Create a new Confluence page in your Custom Widgets space.
+  2. Open the "..." menu > "Insert" is not needed — instead use the page editor's
+     "Copy from HTML" via paste, OR switch to the page source. Easiest path:
+     open this file in a browser, select all (Cmd/Ctrl+A), copy, and paste into the
+     Confluence editor. Headings, tables, and links carry over.
+  3. Slack [n] references are INTERNAL sources — relink to the live threads as needed.
+  Self-contained styling is included only for browser preview; Confluence ignores it.
+-->
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.55; color: #172b4d; max-width: 920px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 28px; border-bottom: 2px solid #dfe1e6; padding-bottom: 8px; }
+  h2 { font-size: 21px; margin-top: 32px; }
+  h3 { font-size: 17px; margin-top: 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #dfe1e6; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f4f5f7; }
+  code { background: #f4f5f7; padding: 1px 5px; border-radius: 3px; font-size: 90%; }
+  .panel { border-radius: 4px; padding: 12px 16px; margin: 14px 0; }
+  .info { background: #deebff; border-left: 4px solid #4c9aff; }
+  .note { background: #eae6ff; border-left: 4px solid #998dd9; }
+  .warn { background: #fffae6; border-left: 4px solid #ffab00; }
+  .success { background: #e3fcef; border-left: 4px solid #36b37e; }
+  small { color: #6b778c; }
+</style>
+
+<h1>Email Personalization Widget</h1>
+
+<p><strong>Owner:</strong> Technical Services / Staffbase Labs &nbsp;|&nbsp; <strong>Status:</strong> <em>Reference</em> &nbsp;|&nbsp; <strong>Last reviewed:</strong> June 2026</p>
+
+<div class="panel info">
+<p><strong>Summary.</strong> Staffbase Email ships a native personalization capability (Core: names; Advanced Plan: custom-data personalization via CSV). Where the native feature falls short — most commonly the requirement to upload a CSV instead of reading stored profile fields — Technical Services can deliver a <strong>custom widget</strong>. The best-documented variant is the <strong>Email Signature Generator</strong>, which auto-populates a signature from a user's Staffbase profile. This page covers the native feature, its known limitation, the custom widget spec and pricing, the widget framework, and known edge cases.</p>
+</div>
+
+<h2>1. Native Platform Feature: Email Personalization (Advanced Plan)</h2>
+
+<p>Staffbase Email has a built-in personalization capability that is part of the Advanced Plan:</p>
+
+<blockquote><em>"Advanced Personalization: Tailor every email with custom tags and CSV-uploaded data to reach the right people, make content feel personal, and increase engagement."</em></blockquote>
+
+<h3>Key capabilities</h3>
+
+<table>
+<thead><tr><th>Capability</th><th>Plan</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Name personalization</td><td>Core</td><td>First name, last name.</td></tr>
+<tr><td>Subject line &amp; preview text personalization</td><td>Advanced</td><td>Insert personalization tags with fallback text.</td></tr>
+<tr><td>Custom data via CSV upload</td><td>Advanced</td><td>Upload a list with an <code>identifier</code> column (email address or internal/external ID) plus any custom columns used as tags in the email body.</td></tr>
+<tr><td>Fallback text</td><td>Advanced</td><td>If a recipient has no value for a tag, fallback text is used. Warnings are informational only and do not block sending.</td></tr>
+<tr><td>Single-use tags</td><td>Advanced</td><td>CSV-uploaded custom fields usable within the email designer for per-recipient values.</td></tr>
+<tr><td>Test email "View As"</td><td>Advanced</td><td>Admins preview the email as a specific recipient to validate personalized values. Gated behind feature flag <code>email_test_send_to_personalized_user</code>.</td></tr>
+<tr><td>Dynamic Block Targeting</td><td>Advanced</td><td>Personalize email content blocks by user group/role within a single draft.</td></tr>
+</tbody>
+</table>
+
+<h3>Support documentation</h3>
+<ul>
+<li><a href="https://support.staffbase.com/hc/en-us/articles/30401613276946-Personalizing-Emails-With-Custom-Data-in-Staffbase-Email">Personalizing Emails With Custom Data in Staffbase Email</a></li>
+<li><a href="https://support.staffbase.com/hc/en-us/articles/31210419382546">Personalization With Custom Data in Staffbase Email — FAQ</a></li>
+<li><a href="https://support.staffbase.com/hc/en-us/articles/10585999233938">Personalizing Employee Emails with Names</a></li>
+<li><a href="https://support.staffbase.com/hc/en-us/articles/19122926598930">Personalizing Employee Emails with Custom Attributes</a></li>
+</ul>
+
+<h2>2. Known Limitation: Profile Field Personalization</h2>
+
+<div class="panel warn">
+<p>The native personalization requires uploading a CSV. Customers have repeatedly asked that it pull directly from stored user profile fields instead.</p>
+</div>
+
+<blockquote><em>"Email personalization — we shouldn't have to upload a new list to use this feature. We're already storing information in our Atlas user profiles — why does this feature not pull from there?"</em></blockquote>
+
+<p>Custom profile-field segmentation and personalized targeting is on the <strong>2026 Email roadmap</strong> as a strategic initiative. Until that ships, the custom widget below is the workaround for profile-driven personalization in page contexts.</p>
+
+<h2>3. Custom Widget Version: Email Signature Generator</h2>
+
+<p>The most well-documented custom widget variant is the <strong>Email Signature Generator</strong>, scoped and delivered by the Labs / Technical Engineering team. It generates a personalized email signature for each user, auto-populated from their Staffbase profile fields.</p>
+
+<h3>How it works</h3>
+<ol>
+<li>Widget config includes upload fields for <strong>English and German HTML templates</strong>.</li>
+<li>A <strong>mapping section</strong> lets editors define each placeholder (e.g. <code>{{firstName}}</code>) and map it to the corresponding Staffbase profile field ID.</li>
+<li>When a user opens the page, the widget fetches their profile data, injects mapped values into the template, and renders the final signature — no manual input needed.</li>
+<li>A <strong>language selector</strong> lets users toggle between English and German versions.</li>
+<li>A <strong>Copy button</strong> copies the rendered HTML signature to the clipboard for pasting into any email client (Outlook, Apple Mail, etc.).</li>
+</ol>
+
+<h3>Scoping &amp; pricing</h3>
+<table>
+<thead><tr><th>Item</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Estimated effort</td><td>15 hours</td></tr>
+<tr><td>One-time fee</td><td>€3,750 &nbsp;(or 10h / €2,500 for a simpler version)</td></tr>
+<tr><td>PSP hours</td><td>Can be covered under PSP hours if the customer has them available.</td></tr>
+</tbody>
+</table>
+
+<div class="panel note">
+<p><strong>Out of scope:</strong> Central event/banner selector (trade shows, seasonal campaigns) — would require a backend storage layer not available in the widget framework.</p>
+</div>
+
+<h3>Customer responsibilities</h3>
+<ul>
+<li>Prepare HTML signature templates with placeholder tokens (e.g. <code>{{placeholder_name}}</code>).</li>
+<li>Ensure all required profile fields are populated for all users.</li>
+<li>Provide a test account with representative profile data.</li>
+<li>Provide feedback within 30 days of delivery.</li>
+</ul>
+
+<h2>4. Custom Widget Framework (Technical Context)</h2>
+<ul>
+<li>Custom widgets are built using the <strong>Widget SDK</strong> (~30 KB Web Components).</li>
+<li>Per-user personalization is handled via <strong>JWT</strong>.</li>
+<li>The <strong>Staffbase Labs Custom Widget Collection</strong> (<a href="https://staffbase.github.io/solutions-monorepo/">staffbase.github.io/solutions-monorepo</a>) is a live gallery of all pre-built custom widgets.</li>
+<li>An <strong>AI-powered widget builder</strong> is available internally — describe the widget in plain English, refine via chat, and download a ready-to-use <code>.min.js</code> file.</li>
+</ul>
+
+<h2>5. Known Behavior / Edge Cases</h2>
+<table>
+<thead><tr><th>Area</th><th>Behavior</th></tr></thead>
+<tbody>
+<tr><td>CC functionality</td><td>Not supported. A recipient either receives the email or doesn't — there is no way to CC an additional address.</td></tr>
+<tr><td>Personalization widget in Journeys</td><td>Currently works only for <strong>Push notifications</strong>, not Email notifications within Journeys.</td></tr>
+<tr><td>CSV identifier column</td><td>Must match the user's email address or their internal/external Staffbase ID.</td></tr>
+</tbody>
+</table>
+
+<h2>Sources</h2>
+<p><small>The following are internal Slack references from the original brief. Relink to the live threads/files as needed; some are gated to specific channels.</small></p>
+<ol>
+<li><small>Order form (NICE Ltd, Mar 2026) — Advanced Personalization plan language. <a href="https://staffbasehq.slack.com/files/U03PGCVH99V/F0B0U3A235L/order_form_with_nice_ltd_march_24__2026___69c2bada6c___4___version_1_.pdf?origin_team=T3ZFH0BAB&origin_channel=D03PX0R5TEW">Slack file</a></small></li>
+<li><small>Corp Comm — Business Priority deck (subject/preview personalization). <a href="https://staffbasehq.slack.com/files/U03PGCVH99V/F0B2WMG8GKD/corp_comm_____business_priority.pptx?origin_team=T3ZFH0BAB&origin_channel=D03PX0R5TEW">Slack file</a></small></li>
+<li><small>Custom data via CSV upload — <a href="https://staffbasehq.slack.com/archives/C0B6W22H4CB/p1781801987853519?thread_ts=1781801987.853519&cid=C0B6W22H4CB">Slack thread</a></small></li>
+<li><small>Fallback text behavior — <a href="https://staffbasehq.slack.com/archives/CHTSM8JHF/p1778702262330359?thread_ts=1778702262.330359&cid=CHTSM8JHF">Slack thread</a></small></li>
+<li><small>Single-use tags — <a href="https://staffbasehq.slack.com/archives/C0BBQF8KJSV/p1781820765952909">Slack message</a></small></li>
+<li><small>Test email "View As" feature flag — <a href="https://staffbasehq.slack.com/archives/C0BBQF8KJSV/p1782119653832849?thread_ts=1782119653.832849&cid=C0BBQF8KJSV">Slack thread</a></small></li>
+<li><small>Dynamic Block Targeting — order form. <a href="https://staffbasehq.slack.com/files/U03PGCVH99V/F0B0U3A235L/order_form_with_nice_ltd_march_24__2026___69c2bada6c___4___version_1_.pdf?origin_team=T3ZFH0BAB&origin_channel=D03PX0R5TEW">Slack file</a></small></li>
+<li><small>Release notes / support doc links — <a href="https://staffbasehq.slack.com/archives/CC2UYM7B5/p1764250163997289?thread_ts=1764250163.997289&cid=CC2UYM7B5">Slack thread</a></small></li>
+<li><small>Profile field personalization request — <a href="https://staffbasehq.slack.com/archives/CC2BU6QBA/p1724958726213039?thread_ts=1724958726.213039&cid=CC2BU6QBA">Slack thread</a></small></li>
+<li><small>Customer quote on pulling from Atlas profiles — <a href="https://staffbasehq.slack.com/archives/C04HC4T1NAX/p1724958310437869">Slack message</a></small></li>
+<li><small>2026 Email roadmap — <a href="https://staffbasehq.slack.com/files/U03PGCVH99V/F0AR48G1G23/_2026?origin_team=T3ZFH0BAB&origin_channel=D03PX0R5TEW">Slack file</a></small></li>
+<li><small>Email Signature Generator spec — <a href="https://staffbasehq.slack.com/archives/C054TLQS0Q3/p1780392161020669?thread_ts=1776081212.946469&cid=C054TLQS0Q3">Slack thread</a></small></li>
+<li><small>Pricing (15h / €3,750) — <a href="https://staffbasehq.slack.com/archives/C054TLQS0Q3/p1776103886500039?thread_ts=1776081212.946469&cid=C054TLQS0Q3">Slack thread</a></small></li>
+<li><small>Widget SDK / integrations framework — <a href="https://staffbasehq.slack.com/files/U03PGCVH99V/F0B79D10BE3/integrations_framework.pdf?origin_team=T3ZFH0BAB&origin_channel=D03PX0R5TEW">Slack file</a></small></li>
+<li><small>Custom Widget Collection gallery — <a href="https://staffbasehq.slack.com/archives/C0ASB59629H/p1780403891620329?thread_ts=1780403891.620329&cid=C0ASB59629H">Slack thread</a></small></li>
+<li><small>AI-powered widget builder — <a href="https://staffbasehq.slack.com/archives/C04GATF4BS6/p1776186016542179?thread_ts=1776185980.270709&cid=C04GATF4BS6">Slack thread</a></small></li>
+<li><small>CC not supported — <a href="https://staffbasehq.slack.com/archives/CHTSM8JHF/p1778702262330359?thread_ts=1778702262.330359&cid=CHTSM8JHF">Slack thread</a></small></li>
+<li><small>Journeys push-only personalization — <a href="https://staffbasehq.slack.com/archives/CC2UYM7B5/p1683676530161999?thread_ts=1683676530.161999&cid=CC2UYM7B5">Slack thread</a></small></li>
+</ol>
