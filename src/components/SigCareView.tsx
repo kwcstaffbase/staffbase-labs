@@ -38,7 +38,7 @@ type Resolution =
   | { mode: 'loading' }
   | { mode: 'all' }
   | { mode: 'account'; accountId: string; source: 'override' | 'slug' | 'instance' | 'demo'; slug: string | null }
-  | { mode: 'no-signature-care'; label: string }
+  | { mode: 'no-signature-care'; accountId: string; label: string }
   | { mode: 'unmatched'; instance: string };
 
 function safeHost(origin: string): string | null {
@@ -56,7 +56,7 @@ function resolveFromSlug(slug: string | null, user: UserContext): Resolution {
     if (accountId) {
       return accountHasSignatureCare(accountId)
         ? { mode: 'account', accountId, source: 'slug', slug }
-        : { mode: 'no-signature-care', label: slug };
+        : { mode: 'no-signature-care', accountId, label: slug };
     }
   }
 
@@ -68,7 +68,7 @@ function resolveFromSlug(slug: string | null, user: UserContext): Resolution {
     if (accountId) {
       return accountHasSignatureCare(accountId)
         ? { mode: 'account', accountId, source: 'instance', slug }
-        : { mode: 'no-signature-care', label: k };
+        : { mode: 'no-signature-care', accountId, label: k };
     }
   }
 
@@ -351,34 +351,94 @@ function SingleAccountView({ accountId, source }: { accountId: string; source: '
   );
 }
 
-function UnmatchedView({ instance }: { instance: string }) {
+// ── Signature Care info / upsell screen (no plan found) ──────────────────────
+// Source: Staffbase Signature Care one-pager.
+
+const SC_PACKAGES: { name: string; hours: number; price: string; featured?: boolean }[] = [
+  { name: 'Essentials', hours: 20, price: '$6k' },
+  { name: 'Bronze', hours: 40, price: '$10k' },
+  { name: 'Silver', hours: 80, price: '$16k', featured: true },
+  { name: 'Gold', hours: 160, price: '$25k' },
+  { name: 'Platinum', hours: 240, price: '$30k' },
+];
+
+const SC_BENEFITS: { title: string; desc: string }[] = [
+  { title: 'Design Services', desc: 'Custom icons, layouts, templates, branding, animations, UI/UX reviews, email templates, multi-branding.' },
+  { title: 'Configuration & Customization', desc: 'New features, custom widgets, plugins, integrations, workflows, and user journeys.' },
+  { title: 'Advisory Services', desc: 'Workshops on content strategy, analytics, information architecture, navigation, and use cases.' },
+  { title: 'Proactive Technical Consultation', desc: 'Guidance on architecture, scalability, code reviews, and development cycles.' },
+  { title: 'Partner Enablement & Deployment', desc: 'Support for external partners, frameworks, code samples, and best practices.' },
+  { title: 'Personalized Training', desc: 'Custom sessions for authors and admins based on your platform setup.' },
+];
+
+function SignatureCareInfo({ variant, accountId, identifier }: { variant: 'unmatched' | 'no-sc'; accountId?: string; identifier?: string }) {
+  const account = accountId ? data.engagements.find((e) => e.accountId === accountId) ?? null : null;
+  const accountName = account?.accountName ?? null;
+  const csmName = account?.csmName ?? null;
+
   return (
     <div className="sc-page">
       <div className="container">
-        <div className="sc-empty">
-          <p style={{ marginBottom: 8, fontWeight: 600, color: 'var(--color-text-heading)' }}>
-            This Staffbase instance isn't linked to a care plan yet.
-          </p>
-          <p style={{ margin: 0 }}>
-            Detected identifier <code>{instance}</code> wasn't recognised. Contact your Staffbase Customer Care team to connect it.
+        <div className="sc-hero">
+          <p className="sc-hero__label">Signature Care</p>
+          <h1 className="sc-hero__title">Hands-on partnership, building on support</h1>
+          <p className="sc-hero__subtitle">
+            Your communications platform is mission-critical. While standard support keeps things running,
+            Signature Care is your flexible toolkit for growth — elevate user experience, enhance design,
+            deepen strategy, and unlock advanced functionality.
           </p>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function NoSignatureCareView({ label }: { label: string }) {
-  return (
-    <div className="sc-page">
-      <div className="container">
-        <div className="sc-empty">
-          <p style={{ marginBottom: 8, fontWeight: 600, color: 'var(--color-text-heading)' }}>
-            No Signature Care plan on this instance.
-          </p>
-          <p style={{ margin: 0 }}>
-            <code>{label}</code> doesn't have a Signature Care package. Talk to your Staffbase team about
-            adding Signature Care to see hours here.
+        <div className="sci-status">
+          <div className="sci-status__main">
+            <h3 className="sci-status__title">
+              {variant === 'no-sc' && accountName
+                ? `${accountName} isn't on a Signature Care plan yet`
+                : "We couldn't find a Signature Care plan for this workspace"}
+            </h3>
+            <p className="sci-status__body">
+              If you're subscribed to Signature Care, your Customer Success Manager can link your hours so
+              they show up here. If you're not yet subscribed, they can walk you through the options below.
+            </p>
+            <p className="sci-status__csm">
+              {csmName ? (
+                <>Your Customer Success Manager is <strong>{csmName}</strong>.</>
+              ) : (
+                <>Reach out to your Staffbase Customer Success Manager to get connected.</>
+              )}
+            </p>
+          </div>
+          <a className="sci-status__cta" href="mailto:custombuilds@staffbase.com" target="_blank" rel="noreferrer">
+            Contact your CSM
+          </a>
+        </div>
+
+        <div className="sc-section">
+          <div className="sc-section__head"><h3>What's included</h3></div>
+          <div className="sci-benefits">
+            {SC_BENEFITS.map((b) => (
+              <div className="sci-benefit" key={b.title}>
+                <span className="sci-benefit__title">{b.title}</span>
+                <span className="sci-benefit__desc">{b.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="sc-section">
+          <div className="sc-section__head"><h3>Pick your power-up package</h3><span className="sc-muted">hours per year</span></div>
+          <div className="sci-packages">
+            {SC_PACKAGES.map((p) => (
+              <div className={`sci-pkg${p.featured ? ' sci-pkg--featured' : ''}`} key={p.name}>
+                <span className="sci-pkg__name">{p.name}</span>
+                <span className="sci-pkg__hours">{p.hours}<span className="sci-pkg__unit">h/yr</span></span>
+                <span className="sci-pkg__price">{p.price}</span>
+              </div>
+            ))}
+          </div>
+          <p className="sci-foot">
+            Hours are a flexible annual pool you draw against for design, build, advisory, and training work.
+            {identifier ? <span className="sc-muted"> · Workspace id: <code>{identifier}</code></span> : null}
           </p>
         </div>
       </div>
@@ -691,9 +751,9 @@ export default function SigCareView({ user }: { user: UserContext }) {
     case 'all':
       return <AllAccountsTracker />;
     case 'unmatched':
-      return <UnmatchedView instance={resolution.instance} />;
+      return <SignatureCareInfo variant="unmatched" identifier={resolution.instance} />;
     case 'no-signature-care':
-      return <NoSignatureCareView label={resolution.label} />;
+      return <SignatureCareInfo variant="no-sc" accountId={resolution.accountId} identifier={resolution.label} />;
     case 'account':
       return <SingleAccountView accountId={resolution.accountId} source={resolution.source} />;
   }
