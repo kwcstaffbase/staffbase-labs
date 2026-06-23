@@ -6,7 +6,7 @@ import {
   DEFAULT_DEMO_ACCOUNT,
   INSTANCE_TO_ACCOUNT,
   SLUG_TO_ACCOUNT,
-  accountHasSignatureCare,
+  accountExists,
 } from '../data/sigCare';
 import {
   aggregateSigCareRows,
@@ -54,7 +54,8 @@ function resolveFromSlug(slug: string | null, user: UserContext): Resolution {
   if (slug) {
     const accountId = SLUG_TO_ACCOUNT[slug];
     if (accountId) {
-      return accountHasSignatureCare(accountId)
+      // Any care-plan engagement (Signature Care, PSP, or PSP+) shows the tracker.
+      return accountExists(accountId)
         ? { mode: 'account', accountId, source: 'slug', slug }
         : { mode: 'no-signature-care', accountId, label: slug };
     }
@@ -66,7 +67,7 @@ function resolveFromSlug(slug: string | null, user: UserContext): Resolution {
   for (const k of keys) {
     const accountId = INSTANCE_TO_ACCOUNT[k];
     if (accountId) {
-      return accountHasSignatureCare(accountId)
+      return accountExists(accountId)
         ? { mode: 'account', accountId, source: 'instance', slug }
         : { mode: 'no-signature-care', accountId, label: k };
     }
