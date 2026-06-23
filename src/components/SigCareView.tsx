@@ -371,7 +371,7 @@ const SC_BENEFITS: { title: string; desc: string }[] = [
   { title: 'Personalized Training', desc: 'Custom sessions for authors and admins based on your platform setup.' },
 ];
 
-function SignatureCareInfo({ variant, accountId, identifier }: { variant: 'unmatched' | 'no-sc'; accountId?: string; identifier?: string }) {
+function SignatureCareInfo({ variant, accountId }: { variant: 'unmatched' | 'no-sc'; accountId?: string }) {
   const account = accountId ? data.engagements.find((e) => e.accountId === accountId) ?? null : null;
   const accountName = account?.accountName ?? null;
   const csmName = account?.csmName ?? null;
@@ -436,10 +436,6 @@ function SignatureCareInfo({ variant, accountId, identifier }: { variant: 'unmat
               </div>
             ))}
           </div>
-          <p className="sci-foot">
-            Hours are a flexible annual pool you draw against for design, build, advisory, and training work.
-            {identifier ? <span className="sc-muted"> · Workspace id: <code>{identifier}</code></span> : null}
-          </p>
         </div>
       </div>
     </div>
@@ -751,9 +747,9 @@ export default function SigCareView({ user }: { user: UserContext }) {
     case 'all':
       return <AllAccountsTracker />;
     case 'unmatched':
-      return <SignatureCareInfo variant="unmatched" identifier={resolution.instance} />;
+      return <SignatureCareInfo variant="unmatched" />;
     case 'no-signature-care':
-      return <SignatureCareInfo variant="no-sc" accountId={resolution.accountId} identifier={resolution.label} />;
+      return <SignatureCareInfo variant="no-sc" accountId={resolution.accountId} />;
     case 'account':
       return <SingleAccountView accountId={resolution.accountId} source={resolution.source} />;
   }
