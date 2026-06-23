@@ -252,6 +252,13 @@ export const INSTANCE_TO_ACCOUNT: Record<string, string> = {
   'energynw.staffbase.com': 'energy-northwest',
   'contoso.staffbase.com': 'contoso-health',
   'northwind.staffbase.com': 'northwind-trading',
+
+  // UT Medical Center — keyed on values available in the plugin JWT with no
+  // network call (the branch slug is only in the *authenticated* discover,
+  // which the cross-origin plugin can't read). Host + JWT instance_id + branchID.
+  'insite.utmck.edu': 'ut-medical-center',
+  '6a3acaabbec0ec7db89f107a': 'ut-medical-center', // JWT instance_id / tenant
+  '641486916db2ba4a44daa9e2': 'ut-medical-center', // Staffbase branch id
 };
 
 // Used only when the plugin is opened standalone (no instance context at all),
