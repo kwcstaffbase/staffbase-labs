@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { UserContext } from '../utils/jwt';
 import { fetchBranchInfo } from '../utils/discover';
+import { loadCarePlan } from '../utils/carePlan';
 import {
   CARE_PLAN_DATA,
   DEFAULT_DEMO_ACCOUNT,
   INSTANCE_TO_ACCOUNT,
   SLUG_TO_ACCOUNT,
   accountExists,
+  type CarePlanData,
 } from '../data/sigCare';
 import {
   aggregateSigCareRows,
@@ -20,8 +22,6 @@ import {
 
 type PackageFilter = 'all' | 'sc' | 'psp';
 type SortKey = 'name' | 'pct' | 'remaining';
-
-const data = CARE_PLAN_DATA;
 
 // ── instance → account resolution ────────────────────────────────────────────
 //
@@ -210,15 +210,16 @@ function sideTotals(allotted: number, used: number, committed: number, available
 
 // ── single-customer view (what a connected instance sees) ────────────────────
 
-function SingleAccountView({ accountId, source }: { accountId: string; source: 'override' | 'slug' | 'instance' | 'demo' }) {
-  const years = useMemo(() => availableYears(data), []);
+function SingleAccountView({ accountId, source, dataset }: { accountId: string; source: 'override' | 'slug' | 'instance' | 'demo' | 'live'; dataset: CarePlanData }) {
+  const data = dataset;
+  const years = useMemo(() => availableYears(data), [data]);
   const [selectedYear, setSelectedYear] = useState<number>(() => years[0] ?? new Date().getFullYear());
 
-  const stats = useMemo(() => getSigCareStats(data, selectedYear), [selectedYear]);
+  const stats = useMemo(() => getSigCareStats(data, selectedYear), [data, selectedYear]);
   const row = useMemo(() => stats.rows.find((r) => r.accountId === accountId) ?? null, [stats.rows, accountId]);
 
-  const engagements = useMemo(() => data.engagements.filter((e) => e.accountId === accountId), [accountId]);
-  const tasks = useMemo(() => (row ? getTaskDetail(data, row, selectedYear, 'all') : []), [row, selectedYear]);
+  const engagements = useMemo(() => data.engagements.filter((e) => e.accountId === accountId), [data, accountId]);
+  const tasks = useMemo(() => (row ? getTaskDetail(data, row, selectedYear, 'all') : []), [data, row, selectedYear]);
 
   if (!row) {
     return (
@@ -373,7 +374,7 @@ const SC_BENEFITS: { title: string; desc: string }[] = [
 ];
 
 function SignatureCareInfo({ variant, accountId }: { variant: 'unmatched' | 'no-sc'; accountId?: string }) {
-  const account = accountId ? data.engagements.find((e) => e.accountId === accountId) ?? null : null;
+  const account = accountId ? CARE_PLAN_DATA.engagements.find((e) => e.accountId === accountId) ?? null : null;
   const accountName = account?.accountName ?? null;
   const csmName = account?.csmName ?? null;
 
@@ -455,8 +456,9 @@ function LoadingView() {
 
 // ── all-customers admin tracker (internal; reachable via ?account=all) ───────
 
-function AllAccountsTracker() {
-  const years = useMemo(() => availableYears(data), []);
+function AllAccountsTracker({ dataset }: { dataset: CarePlanData }) {
+  const data = dataset;
+  const years = useMemo(() => availableYears(data), [data]);
   const [selectedYear, setSelectedYear] = useState<number>(() => years[0] ?? new Date().getFullYear());
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [search, setSearch] = useState('');
@@ -466,7 +468,7 @@ function AllAccountsTracker() {
   const [packageFilter, setPackageFilter] = useState<PackageFilter>('all');
   const [selected, setSelected] = useState<SigCareRow | null>(null);
 
-  const stats = useMemo(() => getSigCareStats(data, selectedYear), [selectedYear]);
+  const stats = useMemo(() => getSigCareStats(data, selectedYear), [data, selectedYear]);
 
   const csmOptions = useMemo(() => {
     const s = new Set<string>();
@@ -509,7 +511,7 @@ function AllAccountsTracker() {
 
   const drawerTasks = useMemo(
     () => (selected ? getTaskDetail(data, selected, selectedYear, 'all') : []),
-    [selected, selectedYear],
+    [data, selected, selectedYear],
   );
 
   function handleExport() {
@@ -709,49 +711,79 @@ function DetailPanel({ row, tasks, onClose }: { row: SigCareRow; tasks: SigCareT
 }
 
 // ── entry point ──────────────────────────────────────────────────────────────
+//
+// Resolution prefers LIVE data from the PS Time Tracker (via /api/care-plan),
+// keyed on the instance host (+ slug when available). If the tracker proxy
+// isn't configured/reachable, it falls back to the bundled static seed using
+// the same slug/instance maps as before, so local/preview builds still work.
+
+type View =
+  | { mode: 'loading' }
+  | { mode: 'all'; dataset: CarePlanData }
+  | { mode: 'account'; dataset: CarePlanData; accountId: string; source: 'override' | 'slug' | 'instance' | 'demo' | 'live' }
+  | { mode: 'no-signature-care'; accountId: string; label: string }
+  | { mode: 'unmatched' };
 
 export default function SigCareView({ user }: { user: UserContext }) {
-  // Synchronous shortcuts that need no network: ?account=all and ?slug=/?account= overrides.
-  const override = useMemo<Resolution | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('account') === 'all') return { mode: 'all' };
-    const forced = params.get('slug') ?? params.get('account');
-    if (forced) return resolveFromSlug(forced, user);
-    return null;
-  }, [user]);
-
-  const [resolution, setResolution] = useState<Resolution>(override ?? { mode: 'loading' });
+  const [view, setView] = useState<View>({ mode: 'loading' });
 
   useEffect(() => {
-    if (override) return; // override already decided synchronously
     let cancelled = false;
     (async () => {
-      const branch = await fetchBranchInfo(user.instanceOrigin);
+      const params = new URLSearchParams(window.location.search);
+      const host = user.instanceOrigin ? safeHost(user.instanceOrigin) : null;
+
+      // Internal all-customers admin table.
+      if (params.get('account') === 'all') {
+        const res = await loadCarePlan({ all: true });
+        if (!cancelled) setView({ mode: 'all', dataset: res.data });
+        return;
+      }
+
+      // Slug: explicit override wins; otherwise best-effort from discover.
+      const override = params.get('slug') ?? params.get('account');
+      let slug = override ?? null;
+      if (!slug) {
+        const branch = await fetchBranchInfo(user.instanceOrigin);
+        slug = branch?.slug ?? null;
+      }
+
+      const res = await loadCarePlan({ host, slug });
       if (cancelled) return;
-      const next = resolveFromSlug(branch?.slug ?? null, user);
-      console.info('[CareHours] resolution', {
-        instanceOrigin: user.instanceOrigin,
-        instanceId: user.instanceId,
-        slug: branch?.slug ?? null,
-        resolution: next,
-      });
-      setResolution(next);
+
+      console.info('[CareHours] resolution', { host, slug, live: res.live, found: res.found });
+
+      if (res.live) {
+        // Tracker answered authoritatively.
+        if (res.found && res.data.engagements.length > 0) {
+          setView({ mode: 'account', dataset: res.data, accountId: res.data.engagements[0].accountId, source: 'live' });
+        } else {
+          setView({ mode: 'unmatched' });
+        }
+        return;
+      }
+
+      // Fallback: tracker proxy not configured → static seed + static resolution.
+      const r = resolveFromSlug(slug, user);
+      if (r.mode === 'account') setView({ mode: 'account', dataset: CARE_PLAN_DATA, accountId: r.accountId, source: r.source });
+      else if (r.mode === 'no-signature-care') setView({ mode: 'no-signature-care', accountId: r.accountId, label: r.label });
+      else setView({ mode: 'unmatched' });
     })();
     return () => {
       cancelled = true;
     };
-  }, [override, user]);
+  }, [user]);
 
-  switch (resolution.mode) {
+  switch (view.mode) {
     case 'loading':
       return <LoadingView />;
     case 'all':
-      return <AllAccountsTracker />;
+      return <AllAccountsTracker dataset={view.dataset} />;
     case 'unmatched':
       return <SignatureCareInfo variant="unmatched" />;
     case 'no-signature-care':
-      return <SignatureCareInfo variant="no-sc" accountId={resolution.accountId} />;
+      return <SignatureCareInfo variant="no-sc" accountId={view.accountId} />;
     case 'account':
-      return <SingleAccountView accountId={resolution.accountId} source={resolution.source} />;
+      return <SingleAccountView accountId={view.accountId} source={view.source} dataset={view.dataset} />;
   }
 }
