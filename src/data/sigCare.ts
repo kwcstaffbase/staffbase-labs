@@ -214,3 +214,36 @@ export const CARE_PLAN_DATA: CarePlanData = {
   tasks,
   timeEntries: [], // unscoped time entries unused in this seed; kept for shape parity
 };
+
+// ----------------------------------------------------------------------------
+// Instance → account mapping
+// ----------------------------------------------------------------------------
+// When the plugin runs inside a customer's Staffbase instance, the JWT/referrer
+// identifies that instance. We map it to the customer's accountId so the view
+// only ever shows that customer's hours. Keys are matched against the JWT
+// `instance_id`/`tenant` AND the instance origin hostname (e.g. from a custom
+// domain). In production this table is the integration point — populate it with
+// each customer's real instance identifier(s).
+export const INSTANCE_TO_ACCOUNT: Record<string, string> = {
+  // instanceId (tenant) ─────────────────────────────────────────────
+  energynw: 'energy-northwest',
+  contosohealth: 'contoso-health',
+  northwind: 'northwind-trading',
+  umbrella: 'umbrella-corp',
+  stark: 'stark-industries',
+  globex: 'globex',
+  initech: 'initech',
+  soylent: 'soylent-corp',
+  hooli: 'hooli',
+  acme: 'acme-co',
+  wayne: 'wayne-enterprises',
+  // instance origin hostname ────────────────────────────────────────
+  'energynw.staffbase.com': 'energy-northwest',
+  'contoso.staffbase.com': 'contoso-health',
+  'northwind.staffbase.com': 'northwind-trading',
+};
+
+// Used only when the plugin is opened standalone (no instance context at all),
+// so a preview renders something. A recognised-but-unmapped instance does NOT
+// fall back to this — it shows a "not recognised" state instead.
+export const DEFAULT_DEMO_ACCOUNT = 'energy-northwest';

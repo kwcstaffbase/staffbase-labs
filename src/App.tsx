@@ -39,7 +39,7 @@ export default function App() {
       <Header activeView={activeNavView} onNavigate={handleNavigate} />
 
       {view === 'carehours' ? (
-        <SigCareView />
+        <SigCareView user={user} />
       ) : view === 'experimental' ? (
         <ExperimentalView />
       ) : view === 'detail' && detailSolution ? (

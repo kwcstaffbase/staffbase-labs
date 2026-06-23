@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { CARE_PLAN_DATA } from '../data/sigCare';
+import type { UserContext } from '../utils/jwt';
+import { CARE_PLAN_DATA, DEFAULT_DEMO_ACCOUNT, INSTANCE_TO_ACCOUNT } from '../data/sigCare';
 import {
   aggregateSigCareRows,
   availableYears,
@@ -14,6 +15,41 @@ type PackageFilter = 'all' | 'sc' | 'psp';
 type SortKey = 'name' | 'pct' | 'remaining';
 
 const data = CARE_PLAN_DATA;
+
+// ── instance → account resolution ────────────────────────────────────────────
+
+type Resolution =
+  | { mode: 'account'; accountId: string; source: 'override' | 'instance' | 'demo' }
+  | { mode: 'all' }
+  | { mode: 'unmatched'; instance: string };
+
+function resolveAccount(user: UserContext): Resolution {
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get('account');
+  if (override === 'all') return { mode: 'all' };
+  if (override) return { mode: 'account', accountId: override, source: 'override' };
+
+  const host = user.instanceOrigin ? safeHost(user.instanceOrigin) : null;
+  const keys = [user.instanceId, host].filter((k): k is string => !!k);
+  for (const k of keys) {
+    const accountId = INSTANCE_TO_ACCOUNT[k];
+    if (accountId) return { mode: 'account', accountId, source: 'instance' };
+  }
+
+  // A recognised instance that we couldn't map must NOT leak another customer.
+  if (keys.length > 0) return { mode: 'unmatched', instance: keys.join(' / ') };
+
+  // No instance context at all (opened standalone for preview).
+  return { mode: 'account', accountId: DEFAULT_DEMO_ACCOUNT, source: 'demo' };
+}
+
+function safeHost(origin: string): string | null {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+}
 
 // ── small presentational helpers ────────────────────────────────────────────
 
@@ -135,67 +171,149 @@ function TaskRow({ t }: { t: SigCareTaskDetail }) {
   );
 }
 
-function DetailPanel({ row, tasks, onClose }: { row: SigCareRow; tasks: SigCareTaskDetail[]; onClose: () => void }) {
+// ── per-package totals from a single row ─────────────────────────────────────
+
+function sideTotals(allotted: number, used: number, committed: number, available: number): CapacityTotals {
+  return { allotted, used, committed, available, pctUsed: allotted > 0 ? Math.round((used / allotted) * 100) : 0 };
+}
+
+// ── single-customer view (what a connected instance sees) ────────────────────
+
+function SingleAccountView({ accountId, source }: { accountId: string; source: 'override' | 'instance' | 'demo' }) {
+  const years = useMemo(() => availableYears(data), []);
+  const [selectedYear, setSelectedYear] = useState<number>(() => years[0] ?? new Date().getFullYear());
+
+  const stats = useMemo(() => getSigCareStats(data, selectedYear), [selectedYear]);
+  const row = useMemo(() => stats.rows.find((r) => r.accountId === accountId) ?? null, [stats.rows, accountId]);
+
+  const engagements = useMemo(() => data.engagements.filter((e) => e.accountId === accountId), [accountId]);
+  const tasks = useMemo(() => (row ? getTaskDetail(data, row, selectedYear, 'all') : []), [row, selectedYear]);
+
+  if (!row) {
+    return (
+      <div className="sc-page">
+        <div className="container">
+          <div className="sc-empty">
+            No Signature Care or PSP engagement is on file for this account.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const drawn = tasks.filter((t) => t.bucket === 'drawn');
   const committed = tasks.filter((t) => t.bucket === 'committed');
-  const drawnTotal = Math.round(drawn.reduce((s, t) => s + t.hours, 0) * 10) / 10;
-  const committedTotal = Math.round(committed.reduce((s, t) => s + t.hours, 0) * 10) / 10;
+  const renewal = engagements.map((e) => e.renewalDate).filter(Boolean).sort()[0] ?? null;
+  const overallLevel = usageLevel(row.pctUsed);
+
   return (
-    <div className="sc-drawer" onClick={onClose}>
-      <div className="sc-drawer__scrim" />
-      <div className="sc-drawer__panel" onClick={(e) => e.stopPropagation()}>
-        <div className="sc-drawer__head">
-          <div>
-            <h3 className="sc-drawer__title">{row.accountName}</h3>
-            <div className="sc-drawer__subtitle">
-              <PackageBadges row={row} />
-              <span className="sc-muted">Task Detail</span>
+    <div className="sc-page">
+      <div className="container">
+        {source === 'demo' && (
+          <div className="sca-banner">
+            Preview mode — showing demo account <strong>{row.accountName}</strong>. When embedded in a customer's
+            Staffbase instance, this page resolves to that customer automatically.
+          </div>
+        )}
+
+        <div className="sc-hero">
+          <p className="sc-hero__label">Your Care Plan</p>
+          <h1 className="sc-hero__title">{row.accountName}</h1>
+          <p className="sc-hero__subtitle">
+            Your Signature Care &amp; PSP hours — what's been used, what's in flight, and every request on file.
+          </p>
+          <div className="sca-meta">
+            {row.csmName && <span>CSM: <strong>{row.csmName}</strong></span>}
+            <PackageBadges row={row} />
+            {renewal && <span className="sc-muted">Renews {formatDate(renewal)}</span>}
+          </div>
+        </div>
+
+        <div className="sc-section">
+          <div className="sc-section__head">
+            <h3>Hours Summary</h3>
+            <div className="sc-yeartoggle">
+              {years.map((yr) => (
+                <button
+                  key={yr}
+                  type="button"
+                  className={`sc-yeartoggle__btn${selectedYear === yr ? ' is-active' : ''}`}
+                  onClick={() => setSelectedYear(yr)}
+                >
+                  {yr}
+                </button>
+              ))}
             </div>
           </div>
-          <button className="sc-drawer__close" aria-label="Close" onClick={onClose}>
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+
+          <div className="sca-stats">
+            <div className="sca-stat"><span className="sca-stat__value">{row.totalAllotted}h</span><span className="sca-stat__label">Allotted</span></div>
+            <div className="sca-stat"><span className="sca-stat__value">{row.totalUsed}h</span><span className="sca-stat__label">Used</span></div>
+            <div className="sca-stat"><span className="sca-stat__value sc-warn">{row.totalCommitted}h</span><span className="sca-stat__label">Committed</span></div>
+            <div className="sca-stat"><span className={`sca-stat__value ${row.totalAvailable < 0 ? 'sc-neg' : 'sc-ok'}`}>{row.totalAvailable}h</span><span className="sca-stat__label">Available</span></div>
+          </div>
+
+          <div className="sca-overall">
+            <span className="sca-overall__label">Overall usage</span>
+            <span className="sca-overall__track">
+              <span className={`sc-usage__bar sc-usage__bar--${overallLevel}`} style={{ width: `${Math.min(row.pctUsed, 100)}%` }} />
+            </span>
+            <span className="sca-overall__pct">{row.pctUsed}%</span>
+          </div>
         </div>
 
-        <div className="sc-drawer__summary">
-          <Summary label="Allotted" value={`${row.totalAllotted}h`} />
-          <Summary label="Used" value={`${row.totalUsed}h`} />
-          <Summary label="Committed" value={`${row.totalCommitted}h`} tone="warn" />
-          <Summary label="Available" value={`${row.totalAvailable}h`} tone={row.totalAvailable < 0 ? 'danger' : 'ok'} />
+        <div className="sc-section">
+          <div className="sc-section__head"><h3>Your Packages</h3><span className="sc-muted">{selectedYear}</span></div>
+          <div className="sc-caps">
+            {row.scAllotted > 0 && (
+              <CapacityCard
+                label={row.scProductName ?? 'Signature Care'}
+                totals={sideTotals(row.scAllotted, row.scUsed, row.scCommitted, row.scAvailable)}
+                accent="purple"
+              />
+            )}
+            {row.pspAllotted > 0 && (
+              <CapacityCard
+                label={row.pspPackage ?? 'PSP'}
+                totals={sideTotals(row.pspAllotted, row.pspUsed, row.pspCommitted, row.pspAvailable)}
+                accent="blue"
+              />
+            )}
+          </div>
         </div>
 
-        <div className="sc-drawer__body">
-          {drawn.length === 0 && committed.length === 0 ? (
-            <div className="sc-drawer__empty">
-              <p>No task detail in this year.</p>
-              <p className="sc-muted">Unscoped time entries (no task) still count toward Used totals.</p>
+        <div className="sc-card sca-requests">
+          <div className="sca-requests__head">
+            <div>
+              <h3 className="sc-toolbar__title">Your Requests</h3>
+              <p className="sc-muted">Everything we've delivered or scoped for you in {selectedYear}.</p>
             </div>
+          </div>
+
+          {drawn.length === 0 && committed.length === 0 ? (
+            <div className="sca-requests__empty">No requests on file for {selectedYear}.</div>
           ) : (
-            <>
+            <div className="sca-requests__body">
               {drawn.length > 0 && (
-                <section className="sc-drawer__section">
-                  <div className="sc-drawer__section-head">
-                    <span className="sc-drawer__section-label">Drawn · {drawn.length} task{drawn.length !== 1 ? 's' : ''}</span>
-                    <span className="sc-muted">{drawnTotal}h</span>
+                <section className="sca-reqsection">
+                  <div className="sca-reqsection__head">
+                    <span className="sca-reqsection__label">Completed · {drawn.length}</span>
+                    <span className="sc-muted">{Math.round(drawn.reduce((s, t) => s + t.hours, 0) * 10) / 10}h drawn</span>
                   </div>
                   {drawn.map((t) => <TaskRow key={t.taskId} t={t} />)}
                 </section>
               )}
               {committed.length > 0 && (
-                <section className="sc-drawer__section">
-                  <div className="sc-drawer__section-head">
-                    <span className="sc-drawer__section-label sc-warn">Committed · {committed.length} task{committed.length !== 1 ? 's' : ''}</span>
-                    <span className="sc-warn">{committedTotal}h</span>
+                <section className="sca-reqsection">
+                  <div className="sca-reqsection__head">
+                    <span className="sca-reqsection__label sc-warn">In flight · {committed.length}</span>
+                    <span className="sc-warn">{Math.round(committed.reduce((s, t) => s + t.hours, 0) * 10) / 10}h committed</span>
                   </div>
                   {committed.map((t) => <TaskRow key={t.taskId} t={t} />)}
-                  <p className="sc-drawer__note">
-                    Committed work is in-flight — its hours aren&apos;t deducted yet, but they reduce Available capacity.
-                  </p>
+                  <p className="sc-drawer__note">In-flight work isn't deducted yet, but it reduces your available hours.</p>
                 </section>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -203,9 +321,26 @@ function DetailPanel({ row, tasks, onClose }: { row: SigCareRow; tasks: SigCareT
   );
 }
 
-// ── main view ────────────────────────────────────────────────────────────────
+function UnmatchedView({ instance }: { instance: string }) {
+  return (
+    <div className="sc-page">
+      <div className="container">
+        <div className="sc-empty">
+          <p style={{ marginBottom: 8, fontWeight: 600, color: 'var(--color-text-heading)' }}>
+            This Staffbase instance isn't linked to a care plan yet.
+          </p>
+          <p style={{ margin: 0 }}>
+            Instance <code>{instance}</code> wasn't recognised. Contact your Staffbase Customer Care team to connect it.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-export default function SigCareView() {
+// ── all-customers admin tracker (internal; reachable via ?account=all) ───────
+
+function AllAccountsTracker() {
   const years = useMemo(() => availableYears(data), []);
   const [selectedYear, setSelectedYear] = useState<number>(() => years[0] ?? new Date().getFullYear());
   const [sortBy, setSortBy] = useState<SortKey>('name');
@@ -286,7 +421,11 @@ export default function SigCareView() {
     URL.revokeObjectURL(url);
   }
 
-  const hasData = stats.totalCustomers > 0;
+  if (stats.totalCustomers === 0) {
+    return (
+      <div className="sc-page"><div className="container"><div className="sc-empty">No active Signature Care or PSP engagements.</div></div></div>
+    );
+  }
 
   return (
     <div className="sc-page">
@@ -294,134 +433,171 @@ export default function SigCareView() {
         <div className="sc-hero">
           <p className="sc-hero__label">Reporting · Signature Care</p>
           <h1 className="sc-hero__title">Care-Plan Hours Tracker</h1>
-          <p className="sc-hero__subtitle">
-            Contract burn across active Signature Care, PSP, and PSP+ engagements.
-          </p>
+          <p className="sc-hero__subtitle">Contract burn across active Signature Care, PSP, and PSP+ engagements.</p>
         </div>
 
-        {!hasData ? (
-          <div className="sc-empty">No active Signature Care or PSP engagements.</div>
-        ) : (
-          <>
-            <div className="sc-kpis">
-              <KpiCard label="Total Enrolled" value={view.totalCustomers} accent="blue" />
-              <KpiCard label="Signature Care" value={view.scCount} accent="purple" />
-              <KpiCard label="PSP" value={view.pspCount} accent="blue" />
-              <KpiCard label="PSP+" value={view.pspPlusCount} accent="blue" />
-              <KpiCard label="Both Packages" value={view.bothCount} accent="purple" />
-            </div>
+        <div className="sc-kpis">
+          <KpiCard label="Total Enrolled" value={view.totalCustomers} accent="blue" />
+          <KpiCard label="Signature Care" value={view.scCount} accent="purple" />
+          <KpiCard label="PSP" value={view.pspCount} accent="blue" />
+          <KpiCard label="PSP+" value={view.pspPlusCount} accent="blue" />
+          <KpiCard label="Both Packages" value={view.bothCount} accent="purple" />
+        </div>
 
-            <div className="sc-section">
-              <div className="sc-section__head">
-                <h3>Capacity Overview</h3>
-                <span className="sc-muted">{selectedYear}</span>
-              </div>
-              <div className="sc-caps">
-                <CapacityCard label="Signature Care (all tiers)" totals={view.totals.sigCare} accent="purple" />
-                <CapacityCard label="PSP" totals={view.totals.psp} accent="blue" />
-                <CapacityCard label="PSP+" totals={view.totals.pspPlus} accent="blue" />
-              </div>
-            </div>
+        <div className="sc-section">
+          <div className="sc-section__head"><h3>Capacity Overview</h3><span className="sc-muted">{selectedYear}</span></div>
+          <div className="sc-caps">
+            <CapacityCard label="Signature Care (all tiers)" totals={view.totals.sigCare} accent="purple" />
+            <CapacityCard label="PSP" totals={view.totals.psp} accent="blue" />
+            <CapacityCard label="PSP+" totals={view.totals.pspPlus} accent="blue" />
+          </div>
+        </div>
 
-            <div className="sc-card">
-              <div className="sc-toolbar">
-                <div className="sc-toolbar__left">
-                  <div>
-                    <h3 className="sc-toolbar__title">Customer Hours Tracker</h3>
-                    <p className="sc-muted">Click a customer to view task-level detail</p>
-                  </div>
-                  <div className="sc-yeartoggle">
-                    {years.map((yr) => (
-                      <button
-                        key={yr}
-                        type="button"
-                        className={`sc-yeartoggle__btn${selectedYear === yr ? ' is-active' : ''}`}
-                        onClick={() => setSelectedYear(yr)}
-                      >
-                        {yr}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="sc-toolbar__right">
-                  <input
-                    type="text"
-                    className="sc-input"
-                    placeholder="Search accounts..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                  <select className="sc-select" value={packageFilter} onChange={(e) => setPackageFilter(e.target.value as PackageFilter)}>
-                    <option value="all">All packages</option>
-                    <option value="sc">Sig Care only</option>
-                    <option value="psp">PSP / PSP+ only</option>
-                  </select>
-                  {csmOptions.length > 0 && (
-                    <select className="sc-select" value={csmFilter} onChange={(e) => setCsmFilter(e.target.value)}>
-                      <option value="all">All CSMs</option>
-                      {csmOptions.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  )}
-                  {tierOptions.length > 0 && (
-                    <select className="sc-select" value={tierFilter} onChange={(e) => setTierFilter(e.target.value)} title="Touch Model Tier">
-                      <option value="all">All Tiers</option>
-                      {tierOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  )}
-                  {territoryOptions.length > 0 && (
-                    <select className="sc-select" value={territoryFilter} onChange={(e) => setTerritoryFilter(e.target.value)}>
-                      <option value="all">All Territories</option>
-                      {territoryOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  )}
-                  <select className="sc-select" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)}>
-                    <option value="name">Account Name</option>
-                    <option value="pct">% Used</option>
-                    <option value="remaining">Hours Remaining</option>
-                  </select>
-                  <button type="button" className="sc-export" onClick={handleExport} disabled={sortedRows.length === 0}>
-                    Export CSV
-                  </button>
-                </div>
+        <div className="sc-card">
+          <div className="sc-toolbar">
+            <div className="sc-toolbar__left">
+              <div>
+                <h3 className="sc-toolbar__title">Customer Hours Tracker</h3>
+                <p className="sc-muted">Click a customer to view task-level detail</p>
               </div>
-
-              <div className="sc-table-wrap">
-                <table className="sc-table">
-                  <thead>
-                    <tr>
-                      <th>Account</th>
-                      <th>CSM</th>
-                      <th>Packages</th>
-                      <th>Sig Care Hours</th>
-                      <th>PSP Hours</th>
-                      <th className="sc-table__usage-col">Overall Usage</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedRows.map((r) => (
-                      <tr key={r.accountId}>
-                        <td>
-                          <button type="button" className="sc-account" onClick={() => setSelected(r)}>{r.accountName}</button>
-                        </td>
-                        <td className="sc-muted">{r.csmName ?? <span className="sc-dash">—</span>}</td>
-                        <td><PackageBadges row={r} /></td>
-                        <td><HoursCell used={r.scUsed} allotted={r.scAllotted} committed={r.scCommitted} available={r.scAvailable} /></td>
-                        <td><HoursCell used={r.pspUsed} allotted={r.pspAllotted} committed={r.pspCommitted} available={r.pspAvailable} /></td>
-                        <td><UsageBar pct={r.pctUsed} /></td>
-                      </tr>
-                    ))}
-                    {sortedRows.length === 0 && (
-                      <tr><td colSpan={6} className="sc-table__empty">No accounts match your filters.</td></tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="sc-yeartoggle">
+                {years.map((yr) => (
+                  <button key={yr} type="button" className={`sc-yeartoggle__btn${selectedYear === yr ? ' is-active' : ''}`} onClick={() => setSelectedYear(yr)}>{yr}</button>
+                ))}
               </div>
             </div>
-          </>
-        )}
+            <div className="sc-toolbar__right">
+              <input type="text" className="sc-input" placeholder="Search accounts..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <select className="sc-select" value={packageFilter} onChange={(e) => setPackageFilter(e.target.value as PackageFilter)}>
+                <option value="all">All packages</option>
+                <option value="sc">Sig Care only</option>
+                <option value="psp">PSP / PSP+ only</option>
+              </select>
+              {csmOptions.length > 0 && (
+                <select className="sc-select" value={csmFilter} onChange={(e) => setCsmFilter(e.target.value)}>
+                  <option value="all">All CSMs</option>
+                  {csmOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              )}
+              {tierOptions.length > 0 && (
+                <select className="sc-select" value={tierFilter} onChange={(e) => setTierFilter(e.target.value)} title="Touch Model Tier">
+                  <option value="all">All Tiers</option>
+                  {tierOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+              {territoryOptions.length > 0 && (
+                <select className="sc-select" value={territoryFilter} onChange={(e) => setTerritoryFilter(e.target.value)}>
+                  <option value="all">All Territories</option>
+                  {territoryOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+              <select className="sc-select" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)}>
+                <option value="name">Account Name</option>
+                <option value="pct">% Used</option>
+                <option value="remaining">Hours Remaining</option>
+              </select>
+              <button type="button" className="sc-export" onClick={handleExport} disabled={sortedRows.length === 0}>Export CSV</button>
+            </div>
+          </div>
+
+          <div className="sc-table-wrap">
+            <table className="sc-table">
+              <thead>
+                <tr>
+                  <th>Account</th><th>CSM</th><th>Packages</th><th>Sig Care Hours</th><th>PSP Hours</th><th className="sc-table__usage-col">Overall Usage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRows.map((r) => (
+                  <tr key={r.accountId}>
+                    <td><button type="button" className="sc-account" onClick={() => setSelected(r)}>{r.accountName}</button></td>
+                    <td className="sc-muted">{r.csmName ?? <span className="sc-dash">—</span>}</td>
+                    <td><PackageBadges row={r} /></td>
+                    <td><HoursCell used={r.scUsed} allotted={r.scAllotted} committed={r.scCommitted} available={r.scAvailable} /></td>
+                    <td><HoursCell used={r.pspUsed} allotted={r.pspAllotted} committed={r.pspCommitted} available={r.pspAvailable} /></td>
+                    <td><UsageBar pct={r.pctUsed} /></td>
+                  </tr>
+                ))}
+                {sortedRows.length === 0 && (
+                  <tr><td colSpan={6} className="sc-table__empty">No accounts match your filters.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {selected && <DetailPanel row={selected} tasks={drawerTasks} onClose={() => setSelected(null)} />}
     </div>
   );
+}
+
+function DetailPanel({ row, tasks, onClose }: { row: SigCareRow; tasks: SigCareTaskDetail[]; onClose: () => void }) {
+  const drawn = tasks.filter((t) => t.bucket === 'drawn');
+  const committed = tasks.filter((t) => t.bucket === 'committed');
+  const drawnTotal = Math.round(drawn.reduce((s, t) => s + t.hours, 0) * 10) / 10;
+  const committedTotal = Math.round(committed.reduce((s, t) => s + t.hours, 0) * 10) / 10;
+  return (
+    <div className="sc-drawer" onClick={onClose}>
+      <div className="sc-drawer__scrim" />
+      <div className="sc-drawer__panel" onClick={(e) => e.stopPropagation()}>
+        <div className="sc-drawer__head">
+          <div>
+            <h3 className="sc-drawer__title">{row.accountName}</h3>
+            <div className="sc-drawer__subtitle"><PackageBadges row={row} /><span className="sc-muted">Task Detail</span></div>
+          </div>
+          <button className="sc-drawer__close" aria-label="Close" onClick={onClose}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="sc-drawer__summary">
+          <Summary label="Allotted" value={`${row.totalAllotted}h`} />
+          <Summary label="Used" value={`${row.totalUsed}h`} />
+          <Summary label="Committed" value={`${row.totalCommitted}h`} tone="warn" />
+          <Summary label="Available" value={`${row.totalAvailable}h`} tone={row.totalAvailable < 0 ? 'danger' : 'ok'} />
+        </div>
+        <div className="sc-drawer__body">
+          {drawn.length === 0 && committed.length === 0 ? (
+            <div className="sc-drawer__empty">
+              <p>No task detail in this year.</p>
+              <p className="sc-muted">Unscoped time entries (no task) still count toward Used totals.</p>
+            </div>
+          ) : (
+            <>
+              {drawn.length > 0 && (
+                <section className="sc-drawer__section">
+                  <div className="sc-drawer__section-head">
+                    <span className="sc-drawer__section-label">Drawn · {drawn.length} task{drawn.length !== 1 ? 's' : ''}</span>
+                    <span className="sc-muted">{drawnTotal}h</span>
+                  </div>
+                  {drawn.map((t) => <TaskRow key={t.taskId} t={t} />)}
+                </section>
+              )}
+              {committed.length > 0 && (
+                <section className="sc-drawer__section">
+                  <div className="sc-drawer__section-head">
+                    <span className="sc-drawer__section-label sc-warn">Committed · {committed.length} task{committed.length !== 1 ? 's' : ''}</span>
+                    <span className="sc-warn">{committedTotal}h</span>
+                  </div>
+                  {committed.map((t) => <TaskRow key={t.taskId} t={t} />)}
+                  <p className="sc-drawer__note">Committed work is in-flight — its hours aren&apos;t deducted yet, but they reduce Available capacity.</p>
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── entry point ──────────────────────────────────────────────────────────────
+
+export default function SigCareView({ user }: { user: UserContext }) {
+  const resolution = useMemo(() => resolveAccount(user), [user]);
+  if (resolution.mode === 'all') return <AllAccountsTracker />;
+  if (resolution.mode === 'unmatched') return <UnmatchedView instance={resolution.instance} />;
+  return <SingleAccountView accountId={resolution.accountId} source={resolution.source} />;
 }
