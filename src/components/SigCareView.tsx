@@ -1,6 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { UserContext } from '../utils/jwt';
-import { CARE_PLAN_DATA, DEFAULT_DEMO_ACCOUNT, INSTANCE_TO_ACCOUNT } from '../data/sigCare';
+import { fetchBranchInfo } from '../utils/discover';
+import {
+  CARE_PLAN_DATA,
+  DEFAULT_DEMO_ACCOUNT,
+  INSTANCE_TO_ACCOUNT,
+  SLUG_TO_ACCOUNT,
+  accountHasSignatureCare,
+} from '../data/sigCare';
 import {
   aggregateSigCareRows,
   availableYears,
@@ -17,31 +24,22 @@ type SortKey = 'name' | 'pct' | 'remaining';
 const data = CARE_PLAN_DATA;
 
 // ── instance → account resolution ────────────────────────────────────────────
+//
+// The page is gated on the Staffbase branch slug. Order of resolution:
+//   1. ?account=all                  → internal all-customers admin table
+//   2. ?slug= / ?account= override   → force a slug/account (testing)
+//   3. /auth/discover branch.slug    → SLUG_TO_ACCOUNT  (the real path)
+//   4. JWT instanceId / origin host  → INSTANCE_TO_ACCOUNT (fallback)
+//   5. no instance context at all    → demo account (standalone preview)
+// Once an account is resolved we require a Signature Care engagement before the
+// page renders; otherwise we show a "no signature care" or "unmatched" state.
 
 type Resolution =
-  | { mode: 'account'; accountId: string; source: 'override' | 'instance' | 'demo' }
+  | { mode: 'loading' }
   | { mode: 'all' }
+  | { mode: 'account'; accountId: string; source: 'override' | 'slug' | 'instance' | 'demo'; slug: string | null }
+  | { mode: 'no-signature-care'; label: string }
   | { mode: 'unmatched'; instance: string };
-
-function resolveAccount(user: UserContext): Resolution {
-  const params = new URLSearchParams(window.location.search);
-  const override = params.get('account');
-  if (override === 'all') return { mode: 'all' };
-  if (override) return { mode: 'account', accountId: override, source: 'override' };
-
-  const host = user.instanceOrigin ? safeHost(user.instanceOrigin) : null;
-  const keys = [user.instanceId, host].filter((k): k is string => !!k);
-  for (const k of keys) {
-    const accountId = INSTANCE_TO_ACCOUNT[k];
-    if (accountId) return { mode: 'account', accountId, source: 'instance' };
-  }
-
-  // A recognised instance that we couldn't map must NOT leak another customer.
-  if (keys.length > 0) return { mode: 'unmatched', instance: keys.join(' / ') };
-
-  // No instance context at all (opened standalone for preview).
-  return { mode: 'account', accountId: DEFAULT_DEMO_ACCOUNT, source: 'demo' };
-}
 
 function safeHost(origin: string): string | null {
   try {
@@ -49,6 +47,38 @@ function safeHost(origin: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Resolve account id from a known branch slug + JWT context (no network).
+function resolveFromSlug(slug: string | null, user: UserContext): Resolution {
+  if (slug) {
+    const accountId = SLUG_TO_ACCOUNT[slug];
+    if (accountId) {
+      return accountHasSignatureCare(accountId)
+        ? { mode: 'account', accountId, source: 'slug', slug }
+        : { mode: 'no-signature-care', label: slug };
+    }
+  }
+
+  // Fallback: JWT instanceId / origin host against the instance map.
+  const host = user.instanceOrigin ? safeHost(user.instanceOrigin) : null;
+  const keys = [user.instanceId, host].filter((k): k is string => !!k);
+  for (const k of keys) {
+    const accountId = INSTANCE_TO_ACCOUNT[k];
+    if (accountId) {
+      return accountHasSignatureCare(accountId)
+        ? { mode: 'account', accountId, source: 'instance', slug }
+        : { mode: 'no-signature-care', label: k };
+    }
+  }
+
+  // Recognised instance/slug but nothing matched → don't leak another customer.
+  if (slug || keys.length > 0) {
+    return { mode: 'unmatched', instance: slug ?? keys.join(' / ') };
+  }
+
+  // No instance context at all (opened standalone for preview).
+  return { mode: 'account', accountId: DEFAULT_DEMO_ACCOUNT, source: 'demo', slug: null };
 }
 
 // ── small presentational helpers ────────────────────────────────────────────
@@ -179,7 +209,7 @@ function sideTotals(allotted: number, used: number, committed: number, available
 
 // ── single-customer view (what a connected instance sees) ────────────────────
 
-function SingleAccountView({ accountId, source }: { accountId: string; source: 'override' | 'instance' | 'demo' }) {
+function SingleAccountView({ accountId, source }: { accountId: string; source: 'override' | 'slug' | 'instance' | 'demo' }) {
   const years = useMemo(() => availableYears(data), []);
   const [selectedYear, setSelectedYear] = useState<number>(() => years[0] ?? new Date().getFullYear());
 
@@ -333,6 +363,34 @@ function UnmatchedView({ instance }: { instance: string }) {
             Instance <code>{instance}</code> wasn't recognised. Contact your Staffbase Customer Care team to connect it.
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function NoSignatureCareView({ label }: { label: string }) {
+  return (
+    <div className="sc-page">
+      <div className="container">
+        <div className="sc-empty">
+          <p style={{ marginBottom: 8, fontWeight: 600, color: 'var(--color-text-heading)' }}>
+            No Signature Care plan on this instance.
+          </p>
+          <p style={{ margin: 0 }}>
+            <code>{label}</code> doesn't have a Signature Care package. Talk to your Staffbase team about
+            adding Signature Care to see hours here.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoadingView() {
+  return (
+    <div className="sc-page">
+      <div className="container">
+        <div className="sc-empty">Loading your care plan…</div>
       </div>
     </div>
   );
@@ -596,8 +654,40 @@ function DetailPanel({ row, tasks, onClose }: { row: SigCareRow; tasks: SigCareT
 // ── entry point ──────────────────────────────────────────────────────────────
 
 export default function SigCareView({ user }: { user: UserContext }) {
-  const resolution = useMemo(() => resolveAccount(user), [user]);
-  if (resolution.mode === 'all') return <AllAccountsTracker />;
-  if (resolution.mode === 'unmatched') return <UnmatchedView instance={resolution.instance} />;
-  return <SingleAccountView accountId={resolution.accountId} source={resolution.source} />;
+  // Synchronous shortcuts that need no network: ?account=all and ?slug=/?account= overrides.
+  const override = useMemo<Resolution | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('account') === 'all') return { mode: 'all' };
+    const forced = params.get('slug') ?? params.get('account');
+    if (forced) return resolveFromSlug(forced, user);
+    return null;
+  }, [user]);
+
+  const [resolution, setResolution] = useState<Resolution>(override ?? { mode: 'loading' });
+
+  useEffect(() => {
+    if (override) return; // override already decided synchronously
+    let cancelled = false;
+    (async () => {
+      const branch = await fetchBranchInfo(user.instanceOrigin);
+      if (cancelled) return;
+      setResolution(resolveFromSlug(branch?.slug ?? null, user));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [override, user]);
+
+  switch (resolution.mode) {
+    case 'loading':
+      return <LoadingView />;
+    case 'all':
+      return <AllAccountsTracker />;
+    case 'unmatched':
+      return <UnmatchedView instance={resolution.instance} />;
+    case 'no-signature-care':
+      return <NoSignatureCareView label={resolution.label} />;
+    case 'account':
+      return <SingleAccountView accountId={resolution.accountId} source={resolution.source} />;
+  }
 }

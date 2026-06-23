@@ -145,6 +145,10 @@ const engagements: CarePlanEngagement[] = [
 
   // Wayne Enterprises — SC Gold, mid usage.
   eng('e-wayne-sc', 'wayne-enterprises', 'Wayne Enterprises', 'Lukas Brandt', 'Tier 1', 'DACH', 'Signature Care Gold', '2025-06-01', '2026-05-31'),
+
+  // UT Medical Center (Staffbase branch slug "utmc") — SC Silver + PSP+.
+  eng('e-utmc-sc', 'ut-medical-center', 'UT Medical Center', 'Dana Whitfield', 'Tier 1', 'Americas', 'Signature Care Silver', '2025-09-01', '2026-08-31'),
+  eng('e-utmc-psp', 'ut-medical-center', 'UT Medical Center', 'Dana Whitfield', 'Tier 1', 'Americas', 'PSP+', '2025-09-01', '2026-08-31'),
 ];
 
 // --- Tasks (the deductions) --------------------------------------------------
@@ -207,6 +211,13 @@ const tasks: CarePlanTask[] = [
   // Wayne Enterprises — SC Gold 160.
   done('t-way-1', 'e-wayne-sc', 'Frontline app launch package', 46, '2026-03-21T17:00:00Z'),
   scoped('t-way-2', 'e-wayne-sc', 'Survey analytics dashboard', 22),
+
+  // UT Medical Center — SC Silver 80 + PSP+ 48.
+  done('t-utmc-1', 'e-utmc-sc', 'Custom gauge widgets (intranet homepage)', 16, '2026-03-12T15:00:00Z'),
+  done('t-utmc-2', 'e-utmc-sc', 'SSO / SAML onboarding configuration', 9.5, '2026-04-25T10:00:00Z'),
+  scoped('t-utmc-3', 'e-utmc-sc', 'Department directory integration', 18),
+  done('t-utmc-4', 'e-utmc-psp', 'Priority incident: push notification delivery', 5, '2026-02-18T08:00:00Z'),
+  scoped('t-utmc-5', 'e-utmc-psp', 'Mobile launch readiness review', 8),
 ];
 
 export const CARE_PLAN_DATA: CarePlanData = {
@@ -247,3 +258,36 @@ export const INSTANCE_TO_ACCOUNT: Record<string, string> = {
 // so a preview renders something. A recognised-but-unmapped instance does NOT
 // fall back to this — it shows a "not recognised" state instead.
 export const DEFAULT_DEMO_ACCOUNT = 'energy-northwest';
+
+// ----------------------------------------------------------------------------
+// Branch slug → account mapping  (primary lookup)
+// ----------------------------------------------------------------------------
+// The Staffbase /auth/discover response exposes `user.branch.slug` — a stable,
+// human-readable id for the instance (e.g. "utmc" for UT Medical Center). This
+// is the key we match the care-plan tracker on. Populate one entry per customer.
+export const SLUG_TO_ACCOUNT: Record<string, string> = {
+  utmc: 'ut-medical-center',
+  energynw: 'energy-northwest',
+  contoso: 'contoso-health',
+  northwind: 'northwind-trading',
+  umbrella: 'umbrella-corp',
+  stark: 'stark-industries',
+  globex: 'globex',
+  initech: 'initech',
+  soylent: 'soylent-corp',
+  hooli: 'hooli',
+  acme: 'acme-co',
+  wayne: 'wayne-enterprises',
+};
+
+/** True if the account holds at least one Signature Care engagement. */
+export function accountHasSignatureCare(accountId: string): boolean {
+  return engagements.some(
+    (e) => e.accountId === accountId && e.engagementType.startsWith('Signature Care'),
+  );
+}
+
+/** Does any account exist for this id (regardless of package)? */
+export function accountExists(accountId: string): boolean {
+  return engagements.some((e) => e.accountId === accountId);
+}
