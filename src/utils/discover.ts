@@ -24,16 +24,25 @@ export async function fetchBranchInfo(instanceOrigin: string | null): Promise<Br
       credentials: 'omit',
       headers: { Accept: 'application/json' },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn('[CareHours] discover HTTP', res.status, instanceOrigin);
+      return null;
+    }
     const data = await res.json().catch(() => null);
     const branch = data?.user?.branch;
-    if (!branch) return null;
-    return {
+    if (!branch) {
+      console.warn('[CareHours] discover had no user.branch', instanceOrigin);
+      return null;
+    }
+    const info: BranchInfo = {
       slug: typeof branch.slug === 'string' ? branch.slug : null,
       name: typeof branch.name === 'string' ? branch.name : null,
       id: typeof branch.id === 'string' ? branch.id : null,
     };
-  } catch {
+    console.info('[CareHours] discover slug =', info.slug, 'from', instanceOrigin);
+    return info;
+  } catch (err) {
+    console.warn('[CareHours] discover fetch failed', instanceOrigin, err);
     return null; // network / CORS failure — caller falls back
   }
 }

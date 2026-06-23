@@ -360,7 +360,7 @@ function UnmatchedView({ instance }: { instance: string }) {
             This Staffbase instance isn't linked to a care plan yet.
           </p>
           <p style={{ margin: 0 }}>
-            Instance <code>{instance}</code> wasn't recognised. Contact your Staffbase Customer Care team to connect it.
+            Detected identifier <code>{instance}</code> wasn't recognised. Contact your Staffbase Customer Care team to connect it.
           </p>
         </div>
       </div>
@@ -671,7 +671,14 @@ export default function SigCareView({ user }: { user: UserContext }) {
     (async () => {
       const branch = await fetchBranchInfo(user.instanceOrigin);
       if (cancelled) return;
-      setResolution(resolveFromSlug(branch?.slug ?? null, user));
+      const next = resolveFromSlug(branch?.slug ?? null, user);
+      console.info('[CareHours] resolution', {
+        instanceOrigin: user.instanceOrigin,
+        instanceId: user.instanceId,
+        slug: branch?.slug ?? null,
+        resolution: next,
+      });
+      setResolution(next);
     })();
     return () => {
       cancelled = true;
