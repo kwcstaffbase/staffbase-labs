@@ -43,27 +43,31 @@ New proxy: `api/care-plan.js`. Set env vars on the plugin's Vercel project:
 
 Deploy the plugin.
 
-## 3. Map each instance to a tracker account
+## 3. Link each customer to its Staffbase instance (in the tracker — no hardcoding)
 
-The plugin can reliably read the instance **host** (e.g. `ahconnect.agilonhealth.com`),
-not the branch slug (that needs an authenticated call we can't make cross-origin).
-Edit the map in `api/care-plan.js`:
+Nothing is mapped in the plugin. The plugin sends the identity it reads on its
+own (instance **host**, and **slug** when available); the tracker matches it
+against two columns on `customers` (added by migration
+`20260623120000_staffbase_link.sql`):
 
-```js
-const HOST_TO_ACCOUNT = {
-  'ahconnect.agilonhealth.com': { account: 'Agilon Health, Inc.' },
-  'insite.utmck.edu':          { account: 'UT Medical Center' },
-};
+- `staffbase_domain` — the instance frontend host, e.g. `ahconnect.agilonhealth.com`
+- `staffbase_slug` — the branch slug, e.g. `agilonhealth` (optional)
+
+Run the migration, then populate per customer:
+
+```sql
+update public.customers
+  set staffbase_domain = 'ahconnect.agilonhealth.com', staffbase_slug = 'agilonhealth'
+  where account_name = 'Agilon Health, Inc.';
+
+update public.customers
+  set staffbase_domain = 'energyhub.energy-northwest.com'
+  where account_name = '<Energy Northwest account name>';
 ```
 
-`account` matches the tracker's `account_name` (case-insensitive). You can use
-`{ accountId: '<tracker account_id>' }` instead for an exact match.
-
-### Removing the map later (optional)
-
-To drop the per-host map entirely, add a `staffbase_domain` (and/or
-`staffbase_slug`) column to the tracker's `customers` table, populate it, and
-have the endpoint match on it. Then the proxy can pass the host straight through.
+That's the only per-customer step, and it lives in the tracker (your system of
+record) — not in the plugin. New customers work the moment their row has a
+`staffbase_domain`.
 
 ## Notes
 
