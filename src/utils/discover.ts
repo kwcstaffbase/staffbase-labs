@@ -2,11 +2,13 @@
 //
 // When the plugin runs embedded in a customer's Staffbase instance, the parent
 // page origin (document.referrer / JWT iss) tells us which instance we're on.
-// /auth/discover is a session endpoint, so the call is made with credentials so
-// the browser sends the user's instance session cookie. Whether the response is
-// readable cross-origin depends on the instance allowing the plugin origin via
-// CORS; if it doesn't, this resolves to null and the caller falls back to the
-// instanceId map or an explicit ?slug= / ?account= override.
+// /auth/discover returns the branch for that domain, including branch.slug.
+//
+// IMPORTANT: this is a NO-credentials (anonymous) cross-origin GET. branch.slug
+// is a property of the domain, not the logged-in user, so it's present in the
+// public discover payload — and Staffbase serves that endpoint with
+// `Access-Control-Allow-Origin: *`. A wildcard ACAO is rejected by the browser
+// if the request is credentialed, so we must NOT send credentials here.
 
 export interface BranchInfo {
   slug: string | null;
@@ -19,7 +21,7 @@ export async function fetchBranchInfo(instanceOrigin: string | null): Promise<Br
   try {
     const res = await fetch(`${instanceOrigin}/auth/discover`, {
       method: 'GET',
-      credentials: 'include',
+      credentials: 'omit',
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) return null;
